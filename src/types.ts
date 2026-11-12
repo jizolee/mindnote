@@ -30,6 +30,8 @@ export interface TableConfig {
   sort: { fieldId: string; dir: 'asc' | 'desc' } | null
   /** Id của trường kiểu lựa chọn dùng để nhóm. */
   groupBy: string | null
+  /** Id của trường kiểu lựa chọn làm cột trong Kanban; null = trường lựa chọn đầu tiên. */
+  boardBy: string | null
 }
 
 export type PropValue = string | number | boolean | string[]
