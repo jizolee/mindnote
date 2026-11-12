@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import type { AppState, Project, PropValue, Task } from './types'
-import { newBlock, textToBlocks } from './blocks'
+import type { AppState, Field, Project, PropValue, Task } from './types'
+import { newBlock, textToBlocks, type Block } from './blocks'
 import { defaultFields } from './fields'
 import { newTask, uid } from './tree'
 
@@ -62,26 +62,72 @@ function seed(): AppState {
   return { projects: [p], activeId: p.id }
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function normTask(r: any): Task {
+  return {
+    id: typeof r?.id === 'string' && r.id ? r.id : uid(),
+    title: String(r?.title ?? ''),
+    done: !!r?.done,
+    notes: String(r?.notes ?? ''),
+    collapsed: !!r?.collapsed,
+    props: r?.props && typeof r.props === 'object' && !Array.isArray(r.props) ? r.props : {},
+    children: Array.isArray(r?.children) ? r.children.map(normTask) : [],
+  }
+}
+
+/** Đưa một dự án đọc từ storage / file về đúng cấu trúc hiện tại (kể cả dữ liệu của các bản cũ). */
+function normProject(r: any): Project | null {
+  if (!r || typeof r !== 'object' || Array.isArray(r)) return null
+  const blocks: Block[] = Array.isArray(r.blocks)
+    ? r.blocks
+        .filter((b: any) => b && typeof b.type === 'string' && typeof b.text === 'string')
+        .map((b: any) => ({ ...b, id: typeof b.id === 'string' && b.id ? b.id : uid() }))
+    : []
+  const fields: Field[] | null = Array.isArray(r.fields)
+    ? r.fields
+        .filter((f: any) => f && typeof f.id === 'string' && typeof f.type === 'string')
+        .map((f: any) => ({ ...f, name: String(f.name ?? ''), options: Array.isArray(f.options) ? f.options : [] }))
+    : null
+  return {
+    id: typeof r.id === 'string' && r.id ? r.id : uid(),
+    title: String(r.title ?? ''),
+    icon: typeof r.icon === 'string' && r.icon ? r.icon : '📄',
+    // Bản đầu tiên lưu mô tả dạng chuỗi `notes`.
+    blocks: blocks.length ? blocks : textToBlocks(typeof r.notes === 'string' ? r.notes : ''),
+    fields: fields ?? defaultFields(),
+    tasks: Array.isArray(r.tasks) ? r.tasks.map(normTask) : [],
+    createdAt: typeof r.createdAt === 'number' ? r.createdAt : Date.now(),
+  }
+}
+
+function normProjects(list: unknown): Project[] {
+  if (!Array.isArray(list)) return []
+  return list.map(normProject).filter((p): p is Project => p !== null)
+}
+
+/** Đọc nội dung file sao lưu. Ném lỗi (thông báo tiếng Việt) nếu file không hợp lệ. */
+export function parseBackup(text: string): Project[] {
+  let data: any
+  try {
+    data = JSON.parse(text)
+  } catch {
+    throw new Error('File không phải JSON hợp lệ.')
+  }
+  if (!data || !Array.isArray(data.projects)) throw new Error('File không phải bản sao lưu của MindNote.')
+  const projects = normProjects(data.projects)
+  if (projects.length === 0) throw new Error('File không chứa dự án nào.')
+  return projects
+}
+
 function load(): AppState {
   try {
     const raw = localStorage.getItem(KEY)
     if (raw) {
-      const s = JSON.parse(raw) as AppState
-      if (Array.isArray(s.projects)) {
-        // Dữ liệu cũ lưu mô tả dạng chuỗi `notes` → chuyển sang khối.
-        for (const p of s.projects as (Project & { notes?: string })[]) {
-          if (!Array.isArray(p.blocks) || p.blocks.length === 0) p.blocks = textToBlocks(p.notes ?? '')
-          delete p.notes
-          // Dữ liệu trước khi có trường: thêm bộ trường mặc định và `props` rỗng cho mọi task.
-          if (!Array.isArray(p.fields)) p.fields = defaultFields()
-          const fix = (ts: Task[]) =>
-            ts.forEach((t) => {
-              t.props ??= {}
-              fix(t.children)
-            })
-          fix(p.tasks)
-        }
-        return s
+      const s = JSON.parse(raw)
+      if (s && Array.isArray(s.projects)) {
+        const projects = normProjects(s.projects)
+        const activeId = projects.some((p) => p.id === s.activeId) ? s.activeId : (projects[0]?.id ?? null)
+        return { projects, activeId }
       }
     }
   } catch {
@@ -114,6 +160,28 @@ export function useApp(): AppState {
 }
 
 export const actions = {
+  /** Nội dung file sao lưu của toàn bộ dự án. */
+  exportData(): string {
+    return JSON.stringify(
+      { app: 'mindnote', version: 1, exportedAt: new Date().toISOString(), projects: state.projects },
+      null,
+      2,
+    )
+  },
+  /** 'merge': thêm vào, dự án trùng id được thay bằng bản trong file. 'replace': thay toàn bộ. */
+  importData(incoming: Project[], mode: 'merge' | 'replace') {
+    let projects: Project[]
+    if (mode === 'replace') {
+      projects = incoming
+    } else {
+      const byId = new Map(incoming.map((p) => [p.id, p]))
+      projects = state.projects.map((p) => byId.get(p.id) ?? p)
+      const have = new Set(state.projects.map((p) => p.id))
+      projects.push(...incoming.filter((p) => !have.has(p.id)))
+    }
+    const activeId = projects.some((p) => p.id === state.activeId) ? state.activeId : (projects[0]?.id ?? null)
+    set({ projects, activeId })
+  },
   setActive(id: string) {
     set({ ...state, activeId: id })
   },
