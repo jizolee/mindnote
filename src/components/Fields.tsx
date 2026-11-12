@@ -135,20 +135,79 @@ interface FieldMenuProps {
   onClose: () => void
 }
 
-/** Popover đổi tên / xoá một trường. */
+/** Popover sửa một trường: đổi tên, quản lý các lựa chọn (thêm / đổi tên / đổi màu / xoá), xoá trường. */
 export function FieldNameMenu({ project, field: f, onClose }: FieldMenuProps & { field: Field }) {
+  const [newOpt, setNewOpt] = useState('')
   const setFields = (next: Field[]) => actions.updateProject(project.id, { fields: next })
+  const setField = (next: Field) => setFields(project.fields.map((x) => (x.id === f.id ? next : x)))
+  const patchOpt = (id: string, p: Partial<FieldOption>) =>
+    setField({ ...f, options: f.options.map((o) => (o.id === id ? { ...o, ...p } : o)) })
+  const hasOptions = f.type === 'select' || f.type === 'multi'
+
+  const addOpt = () => {
+    const label = newOpt.trim()
+    if (!label || f.options.some((o) => o.label.toLowerCase() === label.toLowerCase())) return
+    const used = new Set(f.options.map((o) => o.color))
+    let color = f.options.length % COLORS
+    for (let c = 0; c < COLORS; c++) {
+      if (!used.has(c)) {
+        color = c
+        break
+      }
+    }
+    setField({ ...f, options: [...f.options, { id: uid(), label, color }] })
+    setNewOpt('')
+  }
+
   return (
-    <div className="pop">
+    <div className="pop field-menu">
       <input
         className="pop-input"
         autoFocus
         value={f.name}
         placeholder="Tên trường"
-        onChange={(e) => setFields(project.fields.map((x) => (x.id === f.id ? { ...f, name: e.target.value } : x)))}
+        onChange={(e) => setField({ ...f, name: e.target.value })}
         onKeyDown={(e) => e.key === 'Enter' && onClose()}
       />
       <div className="pop-label">Kiểu: {FIELD_TYPES.find((t) => t.type === f.type)?.label}</div>
+
+      {hasOptions && (
+        <>
+          <div className="pop-label">Các lựa chọn</div>
+          {f.options.map((o) => (
+            <div key={o.id} className="opt-row">
+              <button
+                className={`opt-color chip c${o.color % COLORS}`}
+                title="Đổi màu"
+                onClick={() => patchOpt(o.id, { color: (o.color + 1) % COLORS })}
+              />
+              <input value={o.label} placeholder="Tên lựa chọn" onChange={(e) => patchOpt(o.id, { label: e.target.value })} />
+              <button
+                className="icon-btn danger"
+                title="Xoá lựa chọn"
+                onClick={() => setField({ ...f, options: f.options.filter((x) => x.id !== o.id) })}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <div className="opt-row">
+            <input
+              className="opt-new"
+              value={newOpt}
+              placeholder="Thêm lựa chọn…"
+              onChange={(e) => setNewOpt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) addOpt()
+              }}
+            />
+            <button className="btn-mini" onClick={addOpt} disabled={!newOpt.trim()}>
+              Thêm
+            </button>
+          </div>
+        </>
+      )}
+
       <button
         className="pop-item danger"
         onClick={() => {

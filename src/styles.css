@@ -323,13 +323,14 @@ kbd {
 .modal-note { margin: 12px 0 0 !important; font-size: 12px; color: var(--muted); }
 
 /* Chế độ bảng */
-.table-scroll { flex: 1; min-width: 0; overflow: auto; padding: 20px 24px 320px; }
+.table-view { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.table-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 24px 320px; }
 .tbl { border-top: 1px solid var(--border); }
 .trow { display: grid; border-bottom: 1px solid var(--border); min-height: 38px; }
 .trow.selected { background: var(--accent-soft); }
 .trow:not(.thead):hover { background: var(--bg-side); }
 .trow.selected:hover { background: var(--accent-soft); }
-.thead { position: sticky; top: -20px; z-index: 12; background: var(--bg); }
+.thead { position: sticky; top: 0; z-index: 12; background: var(--bg); }
 .tcell { position: relative; min-width: 0; display: flex; align-items: center; padding: 2px 4px; border-right: 1px solid var(--border); }
 .tcell:last-child { border-right: none; }
 .tcell.center { justify-content: center; }
@@ -351,6 +352,38 @@ kbd {
 .prop-value input[type='date'].empty:not(:focus) { color: transparent; }
 .prop-value input[type='date'].empty:not(:focus):hover { color: var(--muted); }
 .tbl-add { margin: 4px 0; }
-@media (max-width: 760px) { .table-scroll { padding: 12px 12px 320px; } .thead { top: -12px; } .segmented button { padding: 4px 8px; } }
+@media (max-width: 760px) { .table-scroll { padding: 0 12px 320px; } .tbl-toolbar { padding: 8px 12px; } .segmented button { padding: 4px 8px; } }
 .tbl input[type='date'].empty::-webkit-calendar-picker-indicator { opacity: 0; }
 .tbl .tcell:hover input[type='date'].empty::-webkit-calendar-picker-indicator { opacity: 0.6; }
+
+/* Thanh công cụ của bảng: tìm, lọc, sắp xếp, nhóm */
+.tbl-toolbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 24px; }
+.tb-search { width: 200px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
+.tb-search:focus { border-color: var(--accent); }
+.tb-item { position: relative; display: flex; align-items: center; gap: 6px; color: var(--muted); white-space: nowrap; }
+.tb-btn { padding: 5px 10px; border-radius: 7px; color: var(--muted); white-space: nowrap; }
+.tb-btn:hover { background: var(--bg-hover); color: var(--text); }
+.tb-btn.on { color: var(--accent); background: var(--accent-soft); }
+.tb-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.tbl-toolbar select, .filter-row select, .filter-row input {
+  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; max-width: 170px;
+}
+.filter-pop { right: auto; width: min(560px, calc(100vw - 32px)); max-height: 360px; }
+.filter-row { display: flex; align-items: center; gap: 6px; padding: 4px 2px; }
+.filter-row input { width: 150px; }
+.tgroup { margin-top: 14px; }
+.tgroup-head { display: flex; align-items: center; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--border); position: sticky; left: 0; }
+.parent-crumb { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 400; color: var(--muted); }
+.tbl-empty { padding: 28px 8px; color: var(--muted); }
+
+/* Quản lý lựa chọn trong menu của trường */
+.field-menu { min-width: 250px; }
+.opt-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px; }
+.opt-row input { flex: 1; min-width: 0; padding: 4px 6px; border-radius: 6px; }
+.opt-row input:hover, .opt-row input:focus { background: var(--bg-hover); }
+.opt-row .opt-new { border: 1px dashed var(--border); margin-left: 24px; }
+.opt-color { flex: none; width: 18px; height: 18px; padding: 0; border-radius: 5px; cursor: pointer; }
+.opt-color:hover { outline: 2px solid var(--border); }
+.btn-mini { flex: none; padding: 3px 9px; border-radius: 6px; background: var(--accent); color: #fff; font-size: 12px; }
+.btn-mini:disabled { opacity: 0.4; cursor: default; }
+.pop { color: var(--text); font-weight: 400; }

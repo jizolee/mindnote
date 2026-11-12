@@ -1,10 +1,12 @@
 import { useSyncExternalStore } from 'react'
-import type { AppState, Field, Project, PropValue, Task } from './types'
+import type { AppState, Field, Project, PropValue, TableConfig, Task } from './types'
 import { newBlock, textToBlocks, type Block } from './blocks'
 import { defaultFields } from './fields'
 import { newTask, uid } from './tree'
 
 const KEY = 'mindnote:v1'
+
+const emptyTable = (): TableConfig => ({ filters: [], sort: null, groupBy: null })
 
 function seed(): AppState {
   const fields = defaultFields()
@@ -37,6 +39,7 @@ function seed(): AppState {
     ],
     createdAt: Date.now(),
     fields,
+    table: emptyTable(),
     tasks: [
       t('Thiết kế', [
         t('Wireframe trang chủ', [], true),
@@ -95,6 +98,18 @@ function normProject(r: any): Project | null {
     // Bản đầu tiên lưu mô tả dạng chuỗi `notes`.
     blocks: blocks.length ? blocks : textToBlocks(typeof r.notes === 'string' ? r.notes : ''),
     fields: fields ?? defaultFields(),
+    table: {
+      filters: Array.isArray(r.table?.filters)
+        ? r.table.filters
+            .filter((f: any) => f && typeof f.fieldId === 'string' && typeof f.op === 'string')
+            .map((f: any) => ({ id: typeof f.id === 'string' ? f.id : uid(), fieldId: f.fieldId, op: f.op, value: String(f.value ?? '') }))
+        : [],
+      sort:
+        r.table?.sort && typeof r.table.sort.fieldId === 'string'
+          ? { fieldId: r.table.sort.fieldId, dir: r.table.sort.dir === 'desc' ? 'desc' : 'asc' }
+          : null,
+      groupBy: typeof r.table?.groupBy === 'string' ? r.table.groupBy : null,
+    },
     tasks: Array.isArray(r.tasks) ? r.tasks.map(normTask) : [],
     createdAt: typeof r.createdAt === 'number' ? r.createdAt : Date.now(),
   }
@@ -192,6 +207,7 @@ export const actions = {
       icon: '📄',
       blocks: [newBlock()],
       fields: defaultFields(),
+      table: emptyTable(),
       tasks: [],
       createdAt: Date.now(),
     }
@@ -202,7 +218,7 @@ export const actions = {
     const activeId = state.activeId === id ? (projects[0]?.id ?? null) : state.activeId
     set({ projects, activeId })
   },
-  updateProject(id: string, patch: Partial<Pick<Project, 'title' | 'icon' | 'blocks' | 'fields'>>) {
+  updateProject(id: string, patch: Partial<Pick<Project, 'title' | 'icon' | 'blocks' | 'fields' | 'table'>>) {
     set({
       ...state,
       projects: state.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),

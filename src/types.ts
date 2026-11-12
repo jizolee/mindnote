@@ -16,6 +16,22 @@ export interface Field {
   options: FieldOption[]
 }
 
+export interface TableFilter {
+  id: string
+  /** Id trường, hoặc cột đặc biệt (tên task / hoàn thành) — xem tableQuery.ts. */
+  fieldId: string
+  op: string
+  value: string
+}
+
+/** Cấu hình chế độ Bảng của một dự án. */
+export interface TableConfig {
+  filters: TableFilter[]
+  sort: { fieldId: string; dir: 'asc' | 'desc' } | null
+  /** Id của trường kiểu lựa chọn dùng để nhóm. */
+  groupBy: string | null
+}
+
 export type PropValue = string | number | boolean | string[]
 
 export interface Task {
@@ -36,6 +52,7 @@ export interface Project {
   /** Nội dung mô tả dạng khối. */
   blocks: Block[]
   fields: Field[]
+  table: TableConfig
   tasks: Task[]
   createdAt: number
 }
