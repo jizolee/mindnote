@@ -321,3 +321,36 @@ kbd {
 .modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .btn.danger-outline { color: var(--danger); border: 1px solid var(--danger); }
 .modal-note { margin: 12px 0 0 !important; font-size: 12px; color: var(--muted); }
+
+/* Chế độ bảng */
+.table-scroll { flex: 1; min-width: 0; overflow: auto; padding: 20px 24px 320px; }
+.tbl { border-top: 1px solid var(--border); }
+.trow { display: grid; border-bottom: 1px solid var(--border); min-height: 38px; }
+.trow.selected { background: var(--accent-soft); }
+.trow:not(.thead):hover { background: var(--bg-side); }
+.trow.selected:hover { background: var(--accent-soft); }
+.thead { position: sticky; top: -20px; z-index: 12; background: var(--bg); }
+.tcell { position: relative; min-width: 0; display: flex; align-items: center; padding: 2px 4px; border-right: 1px solid var(--border); }
+.tcell:last-child { border-right: none; }
+.tcell.center { justify-content: center; }
+.tcell.th { color: var(--muted); gap: 7px; padding: 2px 6px; white-space: nowrap; }
+.th-btn { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; padding: 5px 4px; border-radius: 6px; color: var(--muted); text-align: left; }
+.th-btn:hover { background: var(--bg-hover); color: var(--text); }
+.tcell.add .th-btn { justify-content: center; font-size: 16px; }
+.tcell.title { gap: 6px; font-weight: 500; }
+.tcell.title .task-title { font-weight: 500; }
+.tcell-actions { display: flex; opacity: 0; position: absolute; right: 4px; top: 5px; background: var(--bg-side); border-radius: 6px; box-shadow: -8px 0 8px var(--bg-side); }
+.trow:hover .tcell-actions { opacity: 1; }
+.tbl .pop { right: auto; width: 250px; }
+.tbl .tcell.add .pop { left: auto; right: 0; }
+.tbl .prop-value input:not(.check):hover, .tbl .prop-value input:not(.check):focus { background: none; }
+.tbl .prop-value input:not(.check):focus { box-shadow: inset 0 0 0 2px var(--accent); }
+.tbl .prop-value input::placeholder { color: transparent; }
+.tbl .select-value .muted { visibility: hidden; }
+.tbl .select-value:hover { background: none; }
+.prop-value input[type='date'].empty:not(:focus) { color: transparent; }
+.prop-value input[type='date'].empty:not(:focus):hover { color: var(--muted); }
+.tbl-add { margin: 4px 0; }
+@media (max-width: 760px) { .table-scroll { padding: 12px 12px 320px; } .thead { top: -12px; } .segmented button { padding: 4px 8px; } }
+.tbl input[type='date'].empty::-webkit-calendar-picker-indicator { opacity: 0; }
+.tbl .tcell:hover input[type='date'].empty::-webkit-calendar-picker-indicator { opacity: 0.6; }

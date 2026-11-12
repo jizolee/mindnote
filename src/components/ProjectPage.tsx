@@ -4,6 +4,7 @@ import { count } from '../tree'
 import type { Mutate, Project } from '../types'
 import BlockEditor from './BlockEditor'
 import MindMap from './MindMap'
+import TableView from './TableView'
 import TaskDetail from './TaskDetail'
 import TaskList from './TaskList'
 
@@ -16,7 +17,7 @@ interface Props {
 }
 
 export default function ProjectPage({ project, sidebarOpen, onOpenSidebar }: Props) {
-  const [view, setView] = useState<'list' | 'map'>('list')
+  const [view, setView] = useState<'list' | 'table' | 'map'>('list')
   const [detailId, setDetailId] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -42,6 +43,9 @@ export default function ProjectPage({ project, sidebarOpen, onOpenSidebar }: Pro
         <div className="segmented">
           <button className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>
             ☰ Trang
+          </button>
+          <button className={view === 'table' ? 'on' : ''} onClick={() => setView('table')}>
+            ▦ Bảng
           </button>
           <button className={view === 'map' ? 'on' : ''} onClick={() => setView('map')}>
             ⑂ Mindmap
@@ -97,6 +101,8 @@ export default function ProjectPage({ project, sidebarOpen, onOpenSidebar }: Pro
               />
             </div>
           </div>
+        ) : view === 'table' ? (
+          <TableView project={project} mutate={mutate} detailId={detailId} onOpenDetail={setDetailId} />
         ) : (
           <MindMap project={project} mutate={mutate} onOpenDetail={setDetailId} />
         )}

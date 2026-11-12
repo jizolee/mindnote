@@ -46,18 +46,9 @@ export function RowChips({ fields, task }: { fields: Field[]; task: Task }) {
   return out.length ? <div className="row-chips">{out}</div> : null
 }
 
-interface PanelProps {
-  project: Project
-  task: Task
-  mutate: Mutate
-}
-
-/** Bảng trường kiểu Notion trong panel chi tiết task. */
-export function PropertyPanel({ project, task, mutate }: PanelProps) {
+/** Trạng thái popover dùng chung: một khoá đang mở, tự đóng khi bấm ra ngoài hoặc nhấn Esc. */
+export function usePopover() {
   const [open, setOpen] = useState<string | null>(null)
-  const [newName, setNewName] = useState('')
-  const fields = project.fields
-
   useEffect(() => {
     if (!open) return
     const close = (e: MouseEvent) => {
@@ -71,124 +62,172 @@ export function PropertyPanel({ project, task, mutate }: PanelProps) {
       document.removeEventListener('keydown', esc)
     }
   }, [open])
-
-  const setFields = (next: Field[]) => actions.updateProject(project.id, { fields: next })
-  const setField = (f: Field) => setFields(fields.map((x) => (x.id === f.id ? f : x)))
-  const setValue = (fid: string, v: PropValue | undefined) =>
-    mutate((ts) => {
-      const l = locate(ts, task.id)
-      if (!l) return
-      const empty = v === undefined || v === '' || v === false || (Array.isArray(v) && v.length === 0)
-      if (empty) delete l.task.props[fid]
-      else l.task.props[fid] = v
-    })
   const toggle = (key: string) => setOpen((o) => (o === key ? null : key))
+  return { open, setOpen, toggle }
+}
+
+export function setTaskProp(mutate: Mutate, taskId: string, fid: string, v: PropValue | undefined) {
+  mutate((ts) => {
+    const l = locate(ts, taskId)
+    if (!l) return
+    const empty = v === undefined || v === '' || v === false || (Array.isArray(v) && v.length === 0)
+    if (empty) delete l.task.props[fid]
+    else l.task.props[fid] = v
+  })
+}
+
+interface ValueProps {
+  field: Field
+  value: PropValue | undefined
+  /** Task đã xong thì không tô đỏ hạn chót quá hạn. */
+  done: boolean
+  open: boolean
+  onToggle: () => void
+  onClose: () => void
+  onChange: (v: PropValue | undefined) => void
+  onFieldChange: (f: Field) => void
+}
+
+/** Ô sửa giá trị của một trường, theo kiểu trường. */
+export function FieldValue({ field: f, value: v, done, open, onToggle, onClose, onChange, onFieldChange }: ValueProps) {
+  if (f.type === 'text') {
+    return <input value={typeof v === 'string' ? v : ''} placeholder="Trống" onChange={(e) => onChange(e.target.value)} />
+  }
+  if (f.type === 'number') {
+    return (
+      <input
+        type="number"
+        value={typeof v === 'number' ? v : ''}
+        placeholder="Trống"
+        onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+      />
+    )
+  }
+  if (f.type === 'date') {
+    const s = typeof v === 'string' ? v : ''
+    return (
+      <input
+        type="date"
+        className={(s ? '' : 'empty') + (s && !done && isOverdue(s) ? ' late' : '')}
+        value={s}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    )
+  }
+  if (f.type === 'checkbox') {
+    return <input type="checkbox" className="check" checked={v === true} onChange={(e) => onChange(e.target.checked)} />
+  }
+  return (
+    <SelectEditor
+      field={f}
+      value={asList(v)}
+      open={open}
+      onToggle={onToggle}
+      onClose={onClose}
+      onChange={(ids) => onChange(f.type === 'multi' ? ids : ids[0])}
+      onFieldChange={onFieldChange}
+    />
+  )
+}
+
+interface FieldMenuProps {
+  project: Project
+  onClose: () => void
+}
+
+/** Popover đổi tên / xoá một trường. */
+export function FieldNameMenu({ project, field: f, onClose }: FieldMenuProps & { field: Field }) {
+  const setFields = (next: Field[]) => actions.updateProject(project.id, { fields: next })
+  return (
+    <div className="pop">
+      <input
+        className="pop-input"
+        autoFocus
+        value={f.name}
+        placeholder="Tên trường"
+        onChange={(e) => setFields(project.fields.map((x) => (x.id === f.id ? { ...f, name: e.target.value } : x)))}
+        onKeyDown={(e) => e.key === 'Enter' && onClose()}
+      />
+      <div className="pop-label">Kiểu: {FIELD_TYPES.find((t) => t.type === f.type)?.label}</div>
+      <button
+        className="pop-item danger"
+        onClick={() => {
+          if (confirm(`Xoá trường "${f.name}" khỏi mọi công việc trong dự án này?`)) {
+            setFields(project.fields.filter((x) => x.id !== f.id))
+            onClose()
+          }
+        }}
+      >
+        ✕ Xoá trường
+      </button>
+    </div>
+  )
+}
+
+/** Popover thêm trường mới. */
+export function AddFieldMenu({ project, onClose }: FieldMenuProps) {
+  const [name, setName] = useState('')
+  return (
+    <div className="pop">
+      <input className="pop-input" autoFocus value={name} placeholder="Tên trường" onChange={(e) => setName(e.target.value)} />
+      <div className="pop-label">Chọn kiểu</div>
+      {FIELD_TYPES.map((t) => (
+        <button
+          key={t.type}
+          className="pop-item"
+          onClick={() => {
+            actions.updateProject(project.id, { fields: [...project.fields, newField(name.trim() || t.label, t.type)] })
+            onClose()
+          }}
+        >
+          <span className="prop-icon">{t.icon}</span>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+interface PanelProps {
+  project: Project
+  task: Task
+  mutate: Mutate
+}
+
+/** Bảng trường kiểu Notion trong panel chi tiết task. */
+export function PropertyPanel({ project, task, mutate }: PanelProps) {
+  const { open, setOpen, toggle } = usePopover()
+  const fields = project.fields
+  const setField = (f: Field) => actions.updateProject(project.id, { fields: fields.map((x) => (x.id === f.id ? f : x)) })
 
   return (
     <div className="props">
-      {fields.map((f) => {
-        const v = task.props[f.id]
-        return (
-          <div key={f.id} className="prop">
-            <button className="prop-name pop-anchor" title="Đổi tên / xoá trường" onClick={() => toggle('name:' + f.id)}>
-              <span className="prop-icon">{typeIcon(f.type)}</span>
-              <span className="prop-label">{f.name || 'Chưa đặt tên'}</span>
-            </button>
-
-            <div className="prop-value">
-              {f.type === 'text' && (
-                <input value={typeof v === 'string' ? v : ''} placeholder="Trống" onChange={(e) => setValue(f.id, e.target.value)} />
-              )}
-              {f.type === 'number' && (
-                <input
-                  type="number"
-                  value={typeof v === 'number' ? v : ''}
-                  placeholder="Trống"
-                  onChange={(e) => setValue(f.id, e.target.value === '' ? undefined : Number(e.target.value))}
-                />
-              )}
-              {f.type === 'date' && (
-                <input
-                  type="date"
-                  className={typeof v === 'string' && v && !task.done && isOverdue(v) ? 'late' : ''}
-                  value={typeof v === 'string' ? v : ''}
-                  onChange={(e) => setValue(f.id, e.target.value)}
-                />
-              )}
-              {f.type === 'checkbox' && (
-                <input type="checkbox" className="check" checked={v === true} onChange={(e) => setValue(f.id, e.target.checked)} />
-              )}
-              {(f.type === 'select' || f.type === 'multi') && (
-                <SelectEditor
-                  field={f}
-                  value={asList(v)}
-                  open={open === 'val:' + f.id}
-                  onToggle={() => toggle('val:' + f.id)}
-                  onClose={() => setOpen(null)}
-                  onChange={(ids) => setValue(f.id, f.type === 'multi' ? ids : ids[0])}
-                  onFieldChange={setField}
-                />
-              )}
-            </div>
-
-            {open === 'name:' + f.id && (
-              <div className="pop">
-                <input
-                  className="pop-input"
-                  autoFocus
-                  value={f.name}
-                  placeholder="Tên trường"
-                  onChange={(e) => setField({ ...f, name: e.target.value })}
-                  onKeyDown={(e) => e.key === 'Enter' && setOpen(null)}
-                />
-                <div className="pop-label">Kiểu: {FIELD_TYPES.find((t) => t.type === f.type)?.label}</div>
-                <button
-                  className="pop-item danger"
-                  onClick={() => {
-                    if (confirm(`Xoá trường "${f.name}" khỏi mọi công việc trong dự án này?`)) {
-                      setFields(fields.filter((x) => x.id !== f.id))
-                      setOpen(null)
-                    }
-                  }}
-                >
-                  ✕ Xoá trường
-                </button>
-              </div>
-            )}
+      {fields.map((f) => (
+        <div key={f.id} className="prop">
+          <button className="prop-name pop-anchor" title="Đổi tên / xoá trường" onClick={() => toggle('name:' + f.id)}>
+            <span className="prop-icon">{typeIcon(f.type)}</span>
+            <span className="prop-label">{f.name || 'Chưa đặt tên'}</span>
+          </button>
+          <div className="prop-value">
+            <FieldValue
+              field={f}
+              value={task.props[f.id]}
+              done={task.done}
+              open={open === 'val:' + f.id}
+              onToggle={() => toggle('val:' + f.id)}
+              onClose={() => setOpen(null)}
+              onChange={(v) => setTaskProp(mutate, task.id, f.id, v)}
+              onFieldChange={setField}
+            />
           </div>
-        )
-      })}
-
+          {open === 'name:' + f.id && <FieldNameMenu project={project} field={f} onClose={() => setOpen(null)} />}
+        </div>
+      ))}
       <div className="prop">
         <button className="prop-add pop-anchor" onClick={() => toggle('add')}>
           + Thêm trường
         </button>
-        {open === 'add' && (
-          <div className="pop">
-            <input
-              className="pop-input"
-              autoFocus
-              value={newName}
-              placeholder="Tên trường"
-              onChange={(e) => setNewName(e.target.value)}
-            />
-            <div className="pop-label">Chọn kiểu</div>
-            {FIELD_TYPES.map((t) => (
-              <button
-                key={t.type}
-                className="pop-item"
-                onClick={() => {
-                  setFields([...fields, newField(newName.trim() || t.label, t.type)])
-                  setNewName('')
-                  setOpen(null)
-                }}
-              >
-                <span className="prop-icon">{t.icon}</span>
-                {t.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {open === 'add' && <AddFieldMenu project={project} onClose={() => setOpen(null)} />}
       </div>
     </div>
   )
