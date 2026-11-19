@@ -417,3 +417,25 @@ kbd {
 /* Mindmap hai bên */
 .mm-node.left .mm-toggle { right: auto; left: -10px; }
 .mm-dropslot { position: absolute; width: 3px; height: 26px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+
+/* Màu theo nhánh trong mindmap */
+.mm-branch { --bs: hsl(var(--bh) 62% 45%); --bt: hsl(var(--bh) 62% 45% / 0.1); }
+@media (prefers-color-scheme: dark) {
+  .mm-branch { --bs: hsl(var(--bh) 72% 66%); --bt: hsl(var(--bh) 72% 66% / 0.16); }
+}
+.mm-edges path.mm-branch { stroke: var(--bs); opacity: 0.8; }
+.mm-edges path.mm-branch.done { opacity: 0.35; }
+.mm-node.mm-branch { background: linear-gradient(var(--bt), var(--bt)), var(--node); }
+.mm-node.mm-branch:not(.selected):not(.drop-child) { border-color: var(--bs); }
+.mm-node.mm-branch.lvl1 { border-width: 2px; font-weight: 500; }
+.mm-node.mm-branch .mm-toggle { border-color: var(--bs); color: var(--bs); }
+.mm-toolbar button.on { color: var(--accent); background: var(--accent-soft); }
+.mm-palette {
+  position: absolute; top: 58px; left: 50%; transform: translateX(-50%); z-index: 6;
+  display: flex; align-items: center; gap: 6px; padding: 7px 9px;
+  background: var(--node); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
+}
+.mm-swatch { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--bs); background: var(--bs); }
+.mm-swatch.on { outline: 2px solid var(--text); outline-offset: 2px; }
+.mm-swatch-auto { padding: 4px 9px; border-radius: 7px; font-size: 13px; color: var(--muted); }
+.mm-swatch-auto:hover { background: var(--bg-hover); color: var(--text); }

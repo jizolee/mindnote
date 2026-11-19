@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
@@ -16,6 +17,8 @@ const ROOT = '__root__'
 const H = 38
 const VGAP = 14
 const HGAP = 64
+/** Góc màu HSL cho từng nhánh cấp 1; nhánh con dùng lại màu của nhánh cha. */
+const HUES = [215, 265, 150, 42, 325, 4, 185, 95]
 /** Bán kính tìm vị trí thả gần nhất khi con trỏ không nằm trên nút nào (toạ độ canvas). */
 const SNAP = 260
 const FONT = '14px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
@@ -34,6 +37,9 @@ interface LNode {
   /** Chiều cao cả nhánh (gồm các nút con). */
   sh: number
   dir: Dir
+  /** Góc màu của nhánh; null ở nút gốc. */
+  hue: number | null
+  depth: number
   kids: LNode[]
 }
 
@@ -82,11 +88,41 @@ function splitSides(kids: LNode[]): Map<string, Dir> {
   return sides
 }
 
+/**
+ * Màu của từng nhánh cấp 1: nhánh đã chọn màu (`task.color`) giữ nguyên, các nhánh còn lại
+ * lấy lần lượt những màu chưa dùng.
+ */
+function branchHues(tasks: Task[]): number[] {
+  const out = tasks.map((t) => (typeof t.color === 'number' ? ((t.color % HUES.length) + HUES.length) % HUES.length : -1))
+  const used = new Set(out.filter((c) => c >= 0))
+  let next = 0
+  for (let i = 0; i < out.length; i++) {
+    if (out[i] >= 0) continue
+    while (used.has(next) && used.size < HUES.length) next = (next + 1) % HUES.length
+    out[i] = next
+    used.add(next)
+    next = (next + 1) % HUES.length
+  }
+  return out.map((c) => HUES[c])
+}
+
 function layout(project: Project): { nodes: LNode[]; root: LNode } {
   const make = (t: Task): LNode => {
     const text = t.title || 'Công việc…'
     const w = Math.min(320, Math.max(96, textWidth(text, FONT) + 58 + (t.notes ? 20 : 0)))
-    return { id: t.id, title: t.title, task: t, x: 0, y: 0, w, sh: H, dir: 1, kids: t.collapsed ? [] : t.children.map(make) }
+    return {
+      id: t.id,
+      title: t.title,
+      task: t,
+      x: 0,
+      y: 0,
+      w,
+      sh: H,
+      dir: 1,
+      hue: null,
+      depth: 0,
+      kids: t.collapsed ? [] : t.children.map(make),
+    }
   }
   const rootText = `${project.icon} ${project.title || 'Chưa đặt tên'}`
   const root: LNode = {
@@ -98,6 +134,8 @@ function layout(project: Project): { nodes: LNode[]; root: LNode } {
     w: Math.min(360, textWidth(rootText, ROOT_FONT) + 36),
     sh: H,
     dir: 1,
+    hue: null,
+    depth: 0,
     kids: project.tasks.map(make),
   }
 
@@ -112,15 +150,20 @@ function layout(project: Project): { nodes: LNode[]; root: LNode } {
   const right = root.kids.filter((k) => sides.get(k.id) === 1)
   const left = root.kids.filter((k) => sides.get(k.id) === -1)
 
+  const hues = new Map<string, number>()
+  branchHues(project.tasks).forEach((h, i) => hues.set(project.tasks[i].id, h))
+
   const nodes: LNode[] = []
-  const place = (n: LNode, x: number, top: number, dir: Dir) => {
+  const place = (n: LNode, x: number, top: number, dir: Dir, hue: number, depth: number) => {
     n.dir = dir
     n.x = x
     n.y = top + n.sh / 2 - H / 2
+    n.hue = hue
+    n.depth = depth
     nodes.push(n)
     let cy = top + (n.sh - kidsHeight(n)) / 2
     for (const k of n.kids) {
-      place(k, dir > 0 ? x + n.w + HGAP : x - HGAP - k.w, cy, dir)
+      place(k, dir > 0 ? x + n.w + HGAP : x - HGAP - k.w, cy, dir, hue, depth + 1)
       cy += k.sh + VGAP
     }
   }
@@ -133,12 +176,12 @@ function layout(project: Project): { nodes: LNode[]; root: LNode } {
   nodes.push(root)
   let cy = -hr / 2
   for (const k of right) {
-    place(k, root.w + HGAP, cy, 1)
+    place(k, root.w + HGAP, cy, 1, hues.get(k.id) ?? HUES[0], 1)
     cy += k.sh + VGAP
   }
   cy = -hl / 2
   for (const k of left) {
-    place(k, -HGAP - k.w, cy, -1)
+    place(k, -HGAP - k.w, cy, -1, hues.get(k.id) ?? HUES[0], 1)
     cy += k.sh + VGAP
   }
   return { nodes, root }
@@ -416,6 +459,8 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
   }
 
   const rootLevel = selected !== ROOT && project.tasks.some((t) => t.id === selected)
+  const [palette, setPalette] = useState(false)
+  const pickedColor = project.tasks.find((t) => t.id === selected)?.color
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).tagName === 'INPUT') return
@@ -478,7 +523,7 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
       tabIndex={0}
       onKeyDown={onKeyDown}
       onPointerDown={(e) => {
-        if ((e.target as HTMLElement).closest('.mm-node, .mm-toolbar, .mm-zoom')) return
+        if ((e.target as HTMLElement).closest('.mm-node, .mm-toolbar, .mm-zoom, .mm-palette')) return
         pan.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y }
         e.currentTarget.setPointerCapture(e.pointerId)
       }}
@@ -501,7 +546,9 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
               return (
                 <path
                   key={k.id}
-                  className={k.task?.done ? 'done' : ''}
+                  className={'mm-branch' + (k.task?.done ? ' done' : '')}
+                  style={{ '--bh': k.hue } as CSSProperties}
+                  strokeWidth={Math.max(1.4, 3.2 - k.depth * 0.6)}
                   d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
                 />
               )
@@ -518,12 +565,13 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
             (selected === n.id ? ' selected' : '') +
             (t?.done ? ' done' : '') +
             (dragSkip?.has(n.id) ? ' dragging' : '') +
-            (dnd?.target === n.id && dnd.pos === 'child' ? ' drop-child' : '')
+            (dnd?.target === n.id && dnd.pos === 'child' ? ' drop-child' : '') +
+            (n.hue === null ? '' : ' mm-branch' + (n.depth === 1 ? ' lvl1' : ''))
           return (
             <div
               key={n.id}
               className={cls}
-              style={{ left: n.x, top: n.y, width: n.w, height: H }}
+              style={{ left: n.x, top: n.y, width: n.w, height: H, '--bh': n.hue ?? undefined } as CSSProperties}
               onPointerDown={(e) => startNodeDrag(e, n)}
               onClick={() => setSelected(n.id)}
               onDoubleClick={() => startEdit(n.id)}
@@ -615,6 +663,14 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
         <button onClick={() => flipSide(selected)} disabled={!rootLevel} title="Chuyển nhánh sang bên kia nút gốc">
           ⇄ Đổi bên
         </button>
+        <button
+          className={palette ? 'on' : ''}
+          onClick={() => setPalette((o) => !o)}
+          disabled={!rootLevel}
+          title="Đổi màu nhánh"
+        >
+          ◍ Màu
+        </button>
         <button onClick={() => onOpenDetail(selected)} disabled={!selectedIsTask}>
           ⤢ Chi tiết
         </button>
@@ -622,6 +678,33 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
           ✕ Xoá
         </button>
       </div>
+
+      {palette && rootLevel && (
+        <div className="mm-palette">
+          {HUES.map((h, i) => (
+            <button
+              key={h}
+              className={'mm-swatch mm-branch' + (pickedColor === i ? ' on' : '')}
+              style={{ '--bh': h } as CSSProperties}
+              title={'Màu ' + (i + 1)}
+              onClick={() => {
+                update(selected, (t) => (t.color = i))
+                setPalette(false)
+              }}
+            />
+          ))}
+          <button
+            className="mm-swatch-auto"
+            title="Để app tự chọn màu cho nhánh này"
+            onClick={() => {
+              update(selected, (t) => delete t.color)
+              setPalette(false)
+            }}
+          >
+            Tự động
+          </button>
+        </div>
+      )}
 
       <div className="mm-zoom">
         <button onClick={() => zoom(1 / 1.2)}>−</button>

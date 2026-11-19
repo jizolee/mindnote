@@ -74,6 +74,7 @@ function normTask(r: any): Task {
     notes: String(r?.notes ?? ''),
     collapsed: !!r?.collapsed,
     ...(r?.side === 'L' || r?.side === 'R' ? { side: r.side as 'L' | 'R' } : {}),
+    ...(typeof r?.color === 'number' ? { color: r.color } : {}),
     props: r?.props && typeof r.props === 'object' && !Array.isArray(r.props) ? r.props : {},
     children: Array.isArray(r?.children) ? r.children.map(normTask) : [],
   }

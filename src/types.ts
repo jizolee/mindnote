@@ -44,6 +44,8 @@ export interface Task {
   collapsed: boolean
   /** Nhánh cấp 1 đã được ghim sang bên nào của nút gốc trong mindmap. */
   side?: 'L' | 'R'
+  /** Màu nhánh cấp 1 đã chọn (chỉ số trong bảng màu của mindmap). */
+  color?: number
   /** Giá trị các trường, theo id của Field. */
   props: Record<string, PropValue>
   children: Task[]
