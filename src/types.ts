@@ -32,6 +32,8 @@ export interface TableConfig {
   groupBy: string | null
   /** Id của trường kiểu lựa chọn làm cột trong Kanban; null = trường lựa chọn đầu tiên. */
   boardBy: string | null
+  /** Các trường hiện trên nút mindmap; null = hiện tất cả. */
+  mapFields: string[] | null
 }
 
 export type PropValue = string | number | boolean | string[]

@@ -15,6 +15,9 @@ export const typeIcon = (t: FieldType) => FIELD_TYPES.find((x) => x.type === t)?
 /** Số màu có sẵn cho lựa chọn (xem `.chip.c0` … trong CSS). */
 export const COLORS = 8
 
+/** Góc màu HSL cho từng nhánh cấp 1 của mindmap. */
+export const BRANCH_HUES = [215, 265, 150, 42, 325, 4, 185, 95]
+
 export function newField(name: string, type: FieldType, options: string[] = []): Field {
   return {
     id: uid(),

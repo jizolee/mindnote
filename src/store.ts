@@ -6,7 +6,7 @@ import { newTask, uid } from './tree'
 
 const KEY = 'mindnote:v1'
 
-const emptyTable = (): TableConfig => ({ filters: [], sort: null, groupBy: null, boardBy: null })
+const emptyTable = (): TableConfig => ({ filters: [], sort: null, groupBy: null, boardBy: null, mapFields: null })
 
 function seed(): AppState {
   const fields = defaultFields()
@@ -112,6 +112,9 @@ function normProject(r: any): Project | null {
           : null,
       groupBy: typeof r.table?.groupBy === 'string' ? r.table.groupBy : null,
       boardBy: typeof r.table?.boardBy === 'string' ? r.table.boardBy : null,
+      mapFields: Array.isArray(r.table?.mapFields)
+        ? r.table.mapFields.filter((x: unknown) => typeof x === 'string')
+        : null,
     },
     tasks: Array.isArray(r.tasks) ? r.tasks.map(normTask) : [],
     createdAt: typeof r.createdAt === 'number' ? r.createdAt : Date.now(),

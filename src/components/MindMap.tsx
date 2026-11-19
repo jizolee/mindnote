@@ -8,105 +8,98 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
-} from "react";
-import { COLORS, fieldChips, type FieldChip } from "../fields";
-import { actions } from "../store";
-import {
-  addChild,
-  canMove,
-  insertAfter,
-  locate,
-  move,
-  newTask,
-  remove,
-  setDone,
-  type DropPos,
-} from "../tree";
-import type { Mutate, Project, Task } from "../types";
+} from 'react'
+import { BRANCH_HUES as HUES, COLORS, fieldChips, type FieldChip } from '../fields'
+import { actions } from '../store'
+import { addChild, canMove, insertAfter, locate, move, newTask, remove, setDone, type DropPos } from '../tree'
+import type { Mutate, Project, Task } from '../types'
+import NodeMenu from './NodeMenu'
 
-const ROOT = "__root__";
-const H = 38;
-const VGAP = 14;
-const HGAP = 64;
-/** Góc màu HSL cho từng nhánh cấp 1; nhánh con dùng lại màu của nhánh cha. */
-const HUES = [215, 265, 150, 42, 325, 4, 185, 95];
+const ROOT = '__root__'
+const H = 38
+const VGAP = 14
+const HGAP = 64
+/** Khoảng cách dọc giữa hai nhánh cấp 1, rộng hơn để bản đồ nhiều nhánh dễ đọc. */
+const BRANCH_GAP = 36
 /** Bán kính tìm vị trí thả gần nhất khi con trỏ không nằm trên nút nào (toạ độ canvas). */
-const SNAP = 260;
+const SNAP = 260
 /** Chiều cao thêm cho dòng nhãn trạng thái / ưu tiên / người phụ trách. */
-const META_H = 21;
-const FONT = '14px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-const META_FONT =
-  '11px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-const ROOT_FONT =
-  '600 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+const META_H = 21
+const FONT = '14px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+const META_FONT = '11px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+const ROOT_FONT = '600 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
 
 /** Hướng nhánh mọc ra từ nút gốc: 1 = sang phải, -1 = sang trái. */
-type Dir = 1 | -1;
+type Dir = 1 | -1
 
 interface LNode {
-  id: string;
-  title: string;
-  task: Task | null;
-  x: number;
-  y: number;
-  w: number;
+  id: string
+  title: string
+  task: Task | null
+  x: number
+  y: number
+  w: number
   /** Chiều cao của riêng nút này (có dòng nhãn thì cao hơn). */
-  h: number;
+  h: number
   /** Chiều cao cả nhánh (gồm các nút con). */
-  sh: number;
-  dir: Dir;
+  sh: number
+  dir: Dir
   /** Góc màu của nhánh; null ở nút gốc. */
-  hue: number | null;
-  depth: number;
-  chips: FieldChip[];
-  kids: LNode[];
+  hue: number | null
+  depth: number
+  chips: FieldChip[]
+  kids: LNode[]
 }
 
-let ctx2d: CanvasRenderingContext2D | null = null;
+let ctx2d: CanvasRenderingContext2D | null = null
 function textWidth(text: string, font: string): number {
-  ctx2d ??= document.createElement("canvas").getContext("2d");
-  if (!ctx2d) return text.length * 8;
-  ctx2d.font = font;
-  return ctx2d.measureText(text).width;
+  ctx2d ??= document.createElement('canvas').getContext('2d')
+  if (!ctx2d) return text.length * 8
+  ctx2d.font = font
+  return ctx2d.measureText(text).width
 }
 
-const stackHeight = (list: LNode[]) =>
-  list.reduce((s, k) => s + k.sh, 0) + VGAP * Math.max(0, list.length - 1);
+/** Hai nút cạnh nhau cách bao xa; nút có nhánh con thì giãn thêm cho rõ nhóm. */
+const gapBetween = (a: LNode, b: LNode) => VGAP + (a.kids.length || b.kids.length ? 10 : 0)
+
+const stackHeight = (list: LNode[]) => list.reduce((s, k, i) => s + k.sh + (i ? gapBetween(list[i - 1], k) : 0), 0)
+
+/** Chiều cao một bên của nút gốc. */
+const rootStackHeight = (list: LNode[]) => list.reduce((s, k, i) => s + k.sh + (i ? BRANCH_GAP : 0), 0)
 
 /**
  * Chia các nhánh cấp 1 sang hai bên nút gốc: nhánh đã được ghim (`task.side`) giữ nguyên bên,
  * các nhánh còn lại cắt thành hai đoạn liền nhau sao cho hai bên cân chiều cao nhất.
  */
 function splitSides(kids: LNode[]): Map<string, Dir> {
-  const sides = new Map<string, Dir>();
-  const free: LNode[] = [];
-  const pinned = { 1: [] as LNode[], [-1]: [] as LNode[] };
+  const sides = new Map<string, Dir>()
+  const free: LNode[] = []
+  const pinned = { 1: [] as LNode[], [-1]: [] as LNode[] }
   for (const k of kids) {
-    const s = k.task?.side;
-    if (s === "R") {
-      sides.set(k.id, 1);
-      pinned[1].push(k);
-    } else if (s === "L") {
-      sides.set(k.id, -1);
-      pinned[-1].push(k);
+    const s = k.task?.side
+    if (s === 'R') {
+      sides.set(k.id, 1)
+      pinned[1].push(k)
+    } else if (s === 'L') {
+      sides.set(k.id, -1)
+      pinned[-1].push(k)
     } else {
-      free.push(k);
+      free.push(k)
     }
   }
-  let cut = 0;
-  let bestDiff = Infinity;
+  let cut = 0
+  let bestDiff = Infinity
   for (let i = 0; i <= free.length; i++) {
     const diff = Math.abs(
-      stackHeight([...pinned[1], ...free.slice(0, i)]) -
-        stackHeight([...pinned[-1], ...free.slice(i)]),
-    );
+      rootStackHeight([...pinned[1], ...free.slice(0, i)]) - rootStackHeight([...pinned[-1], ...free.slice(i)]),
+    )
     if (diff < bestDiff) {
-      bestDiff = diff;
-      cut = i;
+      bestDiff = diff
+      cut = i
     }
   }
-  free.forEach((k, i) => sides.set(k.id, i < cut ? 1 : -1));
-  return sides;
+  free.forEach((k, i) => sides.set(k.id, i < cut ? 1 : -1))
+  return sides
 }
 
 /**
@@ -115,36 +108,29 @@ function splitSides(kids: LNode[]): Map<string, Dir> {
  */
 function branchHues(tasks: Task[]): number[] {
   const out = tasks.map((t) =>
-    typeof t.color === "number"
-      ? ((t.color % HUES.length) + HUES.length) % HUES.length
-      : -1,
-  );
-  const used = new Set(out.filter((c) => c >= 0));
-  let next = 0;
+    typeof t.color === 'number' ? ((t.color % HUES.length) + HUES.length) % HUES.length : -1,
+  )
+  const used = new Set(out.filter((c) => c >= 0))
+  let next = 0
   for (let i = 0; i < out.length; i++) {
-    if (out[i] >= 0) continue;
-    while (used.has(next) && used.size < HUES.length)
-      next = (next + 1) % HUES.length;
-    out[i] = next;
-    used.add(next);
-    next = (next + 1) % HUES.length;
+    if (out[i] >= 0) continue
+    while (used.has(next) && used.size < HUES.length) next = (next + 1) % HUES.length
+    out[i] = next
+    used.add(next)
+    next = (next + 1) % HUES.length
   }
-  return out.map((c) => HUES[c]);
+  return out.map((c) => HUES[c])
 }
 
 function layout(project: Project): { nodes: LNode[]; root: LNode } {
+  const shown = project.table.mapFields
+  const metaFields = shown === null ? project.fields : project.fields.filter((f) => shown.includes(f.id))
   const make = (t: Task): LNode => {
-    const text = t.title || "Công việc…";
-    const chips = fieldChips(project.fields, t);
-    const titleW = textWidth(text, FONT) + 58 + (t.notes ? 20 : 0);
-    const metaW =
-      chips.length === 0
-        ? 0
-        : chips.reduce(
-            (sum, c) => sum + textWidth(c.label, META_FONT) + 19,
-            0,
-          ) + 24;
-    const w = Math.min(400, Math.max(96, titleW, metaW));
+    const text = t.title || 'Công việc…'
+    const chips = fieldChips(metaFields, t)
+    const titleW = textWidth(text, FONT) + 58 + (t.notes ? 20 : 0)
+    const metaW = chips.length === 0 ? 0 : chips.reduce((sum, c) => sum + textWidth(c.label, META_FONT) + 19, 0) + 24
+    const w = Math.min(400, Math.max(96, titleW, metaW))
     return {
       id: t.id,
       title: t.title,
@@ -159,9 +145,9 @@ function layout(project: Project): { nodes: LNode[]; root: LNode } {
       hue: null,
       depth: 0,
       kids: t.collapsed ? [] : t.children.map(make),
-    };
-  };
-  const rootText = `${project.icon} ${project.title || "Chưa đặt tên"}`;
+    }
+  }
+  const rootText = `${project.icon} ${project.title || 'Chưa đặt tên'}`
   const root: LNode = {
     id: ROOT,
     title: rootText,
@@ -176,463 +162,448 @@ function layout(project: Project): { nodes: LNode[]; root: LNode } {
     hue: null,
     depth: 0,
     kids: project.tasks.map(make),
-  };
+  }
 
-  const kidsHeight = (n: LNode) => stackHeight(n.kids);
+  const kidsHeight = (n: LNode) => stackHeight(n.kids)
   const measure = (n: LNode) => {
-    n.kids.forEach(measure);
-    n.sh = Math.max(n.h, kidsHeight(n));
-  };
-  root.kids.forEach(measure);
-
-  const sides = splitSides(root.kids);
-  const right = root.kids.filter((k) => sides.get(k.id) === 1);
-  const left = root.kids.filter((k) => sides.get(k.id) === -1);
-
-  const hues = new Map<string, number>();
-  branchHues(project.tasks).forEach((h, i) => hues.set(project.tasks[i].id, h));
-
-  const nodes: LNode[] = [];
-  const place = (
-    n: LNode,
-    x: number,
-    top: number,
-    dir: Dir,
-    hue: number,
-    depth: number,
-  ) => {
-    n.dir = dir;
-    n.x = x;
-    n.y = top + n.sh / 2 - n.h / 2;
-    n.hue = hue;
-    n.depth = depth;
-    nodes.push(n);
-    let cy = top + (n.sh - kidsHeight(n)) / 2;
-    for (const k of n.kids) {
-      place(
-        k,
-        dir > 0 ? x + n.w + HGAP : x - HGAP - k.w,
-        cy,
-        dir,
-        hue,
-        depth + 1,
-      );
-      cy += k.sh + VGAP;
-    }
-  };
-
-  const hr = stackHeight(right);
-  const hl = stackHeight(left);
-  root.sh = Math.max(root.h, hr, hl);
-  root.x = 0;
-  root.y = -root.h / 2;
-  nodes.push(root);
-  let cy = -hr / 2;
-  for (const k of right) {
-    place(k, root.w + HGAP, cy, 1, hues.get(k.id) ?? HUES[0], 1);
-    cy += k.sh + VGAP;
+    n.kids.forEach(measure)
+    n.sh = Math.max(n.h, kidsHeight(n))
   }
-  cy = -hl / 2;
-  for (const k of left) {
-    place(k, -HGAP - k.w, cy, -1, hues.get(k.id) ?? HUES[0], 1);
-    cy += k.sh + VGAP;
+  root.kids.forEach(measure)
+
+  const sides = splitSides(root.kids)
+  const right = root.kids.filter((k) => sides.get(k.id) === 1)
+  const left = root.kids.filter((k) => sides.get(k.id) === -1)
+
+  const hues = new Map<string, number>()
+  branchHues(project.tasks).forEach((h, i) => hues.set(project.tasks[i].id, h))
+
+  const nodes: LNode[] = []
+  const place = (n: LNode, x: number, top: number, dir: Dir, hue: number, depth: number) => {
+    n.dir = dir
+    n.x = x
+    n.y = top + n.sh / 2 - n.h / 2
+    n.hue = hue
+    n.depth = depth
+    nodes.push(n)
+    let cy = top + (n.sh - kidsHeight(n)) / 2
+    n.kids.forEach((k, i) => {
+      if (i) cy += gapBetween(n.kids[i - 1], k)
+      place(k, dir > 0 ? x + n.w + HGAP : x - HGAP - k.w, cy, dir, hue, depth + 1)
+      cy += k.sh
+    })
   }
-  return { nodes, root };
+
+  const hr = rootStackHeight(right)
+  const hl = rootStackHeight(left)
+  root.sh = Math.max(root.h, hr, hl)
+  root.x = 0
+  root.y = -root.h / 2
+  nodes.push(root)
+  let cy = -hr / 2
+  right.forEach((k, i) => {
+    if (i) cy += BRANCH_GAP
+    place(k, root.w + HGAP, cy, 1, hues.get(k.id) ?? HUES[0], 1)
+    cy += k.sh
+  })
+  cy = -hl / 2
+  left.forEach((k, i) => {
+    if (i) cy += BRANCH_GAP
+    place(k, -HGAP - k.w, cy, -1, hues.get(k.id) ?? HUES[0], 1)
+    cy += k.sh
+  })
+  return { nodes, root }
 }
 
 interface Drop {
-  target: string;
-  pos: DropPos;
-  dir: Dir;
+  target: string
+  pos: DropPos
+  dir: Dir
 }
 
 interface Dnd {
-  id: string;
-  title: string;
+  id: string
+  title: string
   /** Vị trí con trỏ theo toạ độ canvas. */
-  x: number;
-  y: number;
-  target: string | null;
-  pos: DropPos;
-  dir: Dir;
+  x: number
+  y: number
+  target: string | null
+  pos: DropPos
+  dir: Dir
 }
 
 function subtreeIds(n: LNode, out = new Set<string>()): Set<string> {
-  out.add(n.id);
-  n.kids.forEach((k) => subtreeIds(k, out));
-  return out;
+  out.add(n.id)
+  n.kids.forEach((k) => subtreeIds(k, out))
+  return out
 }
 
 /** Điểm neo của chỗ thả "làm nhánh con của n", nằm giữa n và hàng con của nó. */
 const childAnchor = (n: LNode, dir: Dir) => ({
   x: dir > 0 ? n.x + n.w + HGAP / 2 : n.x - HGAP / 2,
   y: n.y + n.h / 2,
-});
+})
 
 /**
  * Tìm chỗ thả tại toạ độ canvas (x, y): ưu tiên nút đang trỏ vào, nếu con trỏ ở khoảng trống
  * thì lấy chỗ thả gần nhất trong bán kính SNAP. Bỏ qua các nút trong `skip`.
  */
-function dropAt(
-  nodes: LNode[],
-  skip: Set<string>,
-  x: number,
-  y: number,
-): Drop | null {
+function dropAt(nodes: LNode[], skip: Set<string>, x: number, y: number): Drop | null {
   for (const n of nodes) {
-    if (skip.has(n.id)) continue;
-    const isRoot = n.id === ROOT;
-    const padIn = 12;
-    const padOut = HGAP / 2;
-    if (x < n.x - (isRoot || n.dir < 0 ? padOut : padIn)) continue;
-    if (x > n.x + n.w + (isRoot || n.dir > 0 ? padOut : padIn)) continue;
-    if (y < n.y - VGAP / 2 || y > n.y + n.h + VGAP / 2) continue;
-    if (isRoot)
-      return { target: ROOT, pos: "child", dir: x < n.x + n.w / 2 ? -1 : 1 };
-    const edge = n.h * 0.3;
-    if (y < n.y + edge) return { target: n.id, pos: "before", dir: n.dir };
-    if (y > n.y + n.h - edge) return { target: n.id, pos: "after", dir: n.dir };
-    return { target: n.id, pos: "child", dir: n.dir };
+    if (skip.has(n.id)) continue
+    const isRoot = n.id === ROOT
+    const padIn = 12
+    const padOut = HGAP / 2
+    if (x < n.x - (isRoot || n.dir < 0 ? padOut : padIn)) continue
+    if (x > n.x + n.w + (isRoot || n.dir > 0 ? padOut : padIn)) continue
+    if (y < n.y - VGAP / 2 || y > n.y + n.h + VGAP / 2) continue
+    if (isRoot) return { target: ROOT, pos: 'child', dir: x < n.x + n.w / 2 ? -1 : 1 }
+    const edge = n.h * 0.3
+    if (y < n.y + edge) return { target: n.id, pos: 'before', dir: n.dir }
+    if (y > n.y + n.h - edge) return { target: n.id, pos: 'after', dir: n.dir }
+    return { target: n.id, pos: 'child', dir: n.dir }
   }
 
-  let best: Drop | null = null;
-  let bestD = SNAP * SNAP;
+  let best: Drop | null = null
+  let bestD = SNAP * SNAP
   const consider = (d: Drop, ax: number, ay: number) => {
-    const dist = (ax - x) ** 2 + (ay - y) ** 2;
+    const dist = (ax - x) ** 2 + (ay - y) ** 2
     if (dist < bestD) {
-      bestD = dist;
-      best = d;
+      bestD = dist
+      best = d
     }
-  };
+  }
   for (const n of nodes) {
-    if (skip.has(n.id)) continue;
+    if (skip.has(n.id)) continue
     if (n.id === ROOT) {
       for (const dir of [1, -1] as Dir[]) {
-        const a = childAnchor(n, dir);
-        consider({ target: ROOT, pos: "child", dir }, a.x, a.y);
+        const a = childAnchor(n, dir)
+        consider({ target: ROOT, pos: 'child', dir }, a.x, a.y)
       }
-      continue;
+      continue
     }
-    const a = childAnchor(n, n.dir);
-    consider({ target: n.id, pos: "child", dir: n.dir }, a.x, a.y);
-    consider(
-      { target: n.id, pos: "before", dir: n.dir },
-      n.x + n.w / 2,
-      n.y - VGAP / 2,
-    );
-    consider(
-      { target: n.id, pos: "after", dir: n.dir },
-      n.x + n.w / 2,
-      n.y + n.h + VGAP / 2,
-    );
+    const a = childAnchor(n, n.dir)
+    consider({ target: n.id, pos: 'child', dir: n.dir }, a.x, a.y)
+    consider({ target: n.id, pos: 'before', dir: n.dir }, n.x + n.w / 2, n.y - VGAP / 2)
+    consider({ target: n.id, pos: 'after', dir: n.dir }, n.x + n.w / 2, n.y + n.h + VGAP / 2)
   }
-  return best;
+  return best
 }
 
 interface Props {
-  project: Project;
-  mutate: Mutate;
-  onOpenDetail: (id: string) => void;
+  project: Project
+  mutate: Mutate
+  onOpenDetail: (id: string) => void
 }
 
 export default function MindMap({ project, mutate, onOpenDetail }: Props) {
-  const wrap = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState({ x: 60, y: 60, k: 1 });
-  const [selected, setSelected] = useState<string>(ROOT);
-  const [editing, setEditing] = useState<string | null>(null);
-  const pan = useRef<{ px: number; py: number; x: number; y: number } | null>(
-    null,
-  );
+  const wrap = useRef<HTMLDivElement>(null)
+  const [view, setView] = useState({ x: 60, y: 60, k: 1 })
+  const [selected, setSelected] = useState<string>(ROOT)
+  const [editing, setEditing] = useState<string | null>(null)
+  const pan = useRef<{ px: number; py: number; x: number; y: number } | null>(null)
 
-  const { nodes, root } = useMemo(() => layout(project), [project]);
-  const dirOf = (id: string): Dir => nodes.find((n) => n.id === id)?.dir ?? 1;
+  const { nodes, root } = useMemo(() => layout(project), [project])
+  const dirOf = (id: string): Dir => nodes.find((n) => n.id === id)?.dir ?? 1
 
   // --- Kéo-thả nút ---
-  const [dnd, setDnd] = useState<Dnd | null>(null);
-  const live = useRef({ view, nodes, project });
-  live.current = { view, nodes, project };
-  const cleanupDrag = useRef<(() => void) | null>(null);
-  useEffect(() => () => cleanupDrag.current?.(), []);
+  const [dnd, setDnd] = useState<Dnd | null>(null)
+  const live = useRef({ view, nodes, project })
+  live.current = { view, nodes, project }
+  const cleanupDrag = useRef<(() => void) | null>(null)
+  useEffect(() => () => cleanupDrag.current?.(), [])
 
   const startNodeDrag = (e: ReactPointerEvent, n: LNode) => {
-    if (e.button !== 0 || !n.task || editing === n.id) return;
-    if ((e.target as HTMLElement).closest("input, button")) return;
-    const id = n.id;
-    const title = n.task.title || "Công việc…";
-    const sx = e.clientX;
-    const sy = e.clientY;
-    let active = false;
-    let cur: Dnd | null = null;
-    let skip = new Set<string>();
+    if (e.button !== 0 || !n.task || editing === n.id) return
+    if ((e.target as HTMLElement).closest('input, button')) return
+    const id = n.id
+    const title = n.task.title || 'Công việc…'
+    const sx = e.clientX
+    const sy = e.clientY
+    let active = false
+    let cur: Dnd | null = null
+    let skip = new Set<string>()
 
     const onMove = (ev: PointerEvent) => {
-      const el = wrap.current;
-      if (!el) return;
+      const el = wrap.current
+      if (!el) return
       if (!active) {
-        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
-        active = true;
-        const self = live.current.nodes.find((x) => x.id === id);
-        skip = self ? subtreeIds(self) : new Set([id]);
-        setSelected(id);
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return
+        active = true
+        const self = live.current.nodes.find((x) => x.id === id)
+        skip = self ? subtreeIds(self) : new Set([id])
+        setSelected(id)
       }
-      const { view: v, nodes: ns, project: p } = live.current;
-      const r = el.getBoundingClientRect();
-      const x = (ev.clientX - r.left - v.x) / v.k;
-      const y = (ev.clientY - r.top - v.y) / v.k;
-      const hit = dropAt(ns, skip, x, y);
-      const ok =
-        hit && canMove(p.tasks, id, hit.target === ROOT ? null : hit.target);
+      const { view: v, nodes: ns, project: p } = live.current
+      const r = el.getBoundingClientRect()
+      const x = (ev.clientX - r.left - v.x) / v.k
+      const y = (ev.clientY - r.top - v.y) / v.k
+      const hit = dropAt(ns, skip, x, y)
+      const ok = hit && canMove(p.tasks, id, hit.target === ROOT ? null : hit.target)
       cur = {
         id,
         title,
         x,
         y,
         target: ok ? hit.target : null,
-        pos: ok ? hit.pos : "child",
+        pos: ok ? hit.pos : 'child',
         dir: ok ? hit.dir : 1,
-      };
-      setDnd(cur);
-    };
+      }
+      setDnd(cur)
+    }
     const finish = (commit: boolean) => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onCancel);
-      window.removeEventListener("keydown", onKey, true);
-      cleanupDrag.current = null;
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKey, true)
+      cleanupDrag.current = null
       if (commit && cur?.target) {
-        const { target, pos, dir } = cur;
+        const { target, pos, dir } = cur
         mutate((ts) => {
-          move(ts, id, target === ROOT ? null : target, pos);
-          const l = locate(ts, id);
-          if (!l) return;
+          move(ts, id, target === ROOT ? null : target, pos)
+          const l = locate(ts, id)
+          if (!l) return
           // Ở cấp gốc thì ghim bên vừa thả; thành nhánh con thì bên do nhánh cha quyết định.
-          if (l.parent) delete l.task.side;
-          else l.task.side = dir > 0 ? "R" : "L";
-        });
+          if (l.parent) delete l.task.side
+          else l.task.side = dir > 0 ? 'R' : 'L'
+        })
       }
-      setDnd(null);
-    };
-    const onUp = () => finish(true);
-    const onCancel = () => finish(false);
+      setDnd(null)
+    }
+    const onUp = () => finish(true)
+    const onCancel = () => finish(false)
     const onKey = (ev: globalThis.KeyboardEvent) => {
-      if (ev.key === "Escape") {
-        ev.stopPropagation();
-        finish(false);
+      if (ev.key === 'Escape') {
+        ev.stopPropagation()
+        finish(false)
       }
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onCancel);
-    window.addEventListener("keydown", onKey, true);
-    cleanupDrag.current = () => finish(false);
-  };
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKey, true)
+    cleanupDrag.current = () => finish(false)
+  }
 
   const dragSkip = useMemo(() => {
-    if (!dnd) return null;
-    const self = nodes.find((n) => n.id === dnd.id);
-    return self ? subtreeIds(self) : null;
-  }, [dnd, nodes]);
-  const dropNode = dnd?.target
-    ? nodes.find((n) => n.id === dnd.target)
-    : undefined;
+    if (!dnd) return null
+    const self = nodes.find((n) => n.id === dnd.id)
+    return self ? subtreeIds(self) : null
+  }, [dnd, nodes])
+  const dropNode = dnd?.target ? nodes.find((n) => n.id === dnd.target) : undefined
 
   const fit = useCallback(() => {
-    const el = wrap.current;
-    if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
-    const minX = Math.min(...nodes.map((n) => n.x));
-    const maxX = Math.max(...nodes.map((n) => n.x + n.w));
-    const minY = Math.min(...nodes.map((n) => n.y));
-    const maxY = Math.max(...nodes.map((n) => n.y + n.h));
-    const bw = maxX - minX;
-    const bh = maxY - minY;
-    const k = Math.max(
-      0.3,
-      Math.min(1, (width - 96) / bw, (height - 120) / bh),
-    );
+    const el = wrap.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    const minX = Math.min(...nodes.map((n) => n.x))
+    const maxX = Math.max(...nodes.map((n) => n.x + n.w))
+    const minY = Math.min(...nodes.map((n) => n.y))
+    const maxY = Math.max(...nodes.map((n) => n.y + n.h))
+    const bw = maxX - minX
+    const bh = maxY - minY
+    const k = Math.max(0.3, Math.min(1, (width - 96) / bw, (height - 120) / bh))
     setView({
       k,
       x: (width - bw * k) / 2 - minX * k,
       y: (height - bh * k) / 2 - minY * k,
-    });
-  }, [nodes]);
+    })
+  }, [nodes])
 
   // Căn vừa khung một lần khi mở mindmap.
-  const fitted = useRef(false);
+  const fitted = useRef(false)
   useLayoutEffect(() => {
     if (!fitted.current) {
-      fitted.current = true;
-      fit();
+      fitted.current = true
+      fit()
     }
-  }, [fit]);
+  }, [fit])
 
   // Zoom bằng con lăn quanh vị trí con trỏ (cần listener non-passive để preventDefault).
   useEffect(() => {
-    const el = wrap.current;
-    if (!el) return;
+    const el = wrap.current
+    if (!el) return
     const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const r = el.getBoundingClientRect();
-      const mx = e.clientX - r.left;
-      const my = e.clientY - r.top;
+      e.preventDefault()
+      const r = el.getBoundingClientRect()
+      const mx = e.clientX - r.left
+      const my = e.clientY - r.top
       setView((v) => {
-        const k = Math.max(
-          0.25,
-          Math.min(2, v.k * Math.exp(-e.deltaY * 0.0015)),
-        );
+        const k = Math.max(0.25, Math.min(2, v.k * Math.exp(-e.deltaY * 0.0015)))
         return {
           k,
           x: mx - ((mx - v.x) * k) / v.k,
           y: my - ((my - v.y) * k) / v.k,
-        };
-      });
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+        }
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
 
   const zoom = (f: number) =>
     setView((v) => {
-      const el = wrap.current;
-      if (!el) return v;
-      const r = el.getBoundingClientRect();
-      const k = Math.max(0.25, Math.min(2, v.k * f));
-      const mx = r.width / 2;
-      const my = r.height / 2;
+      const el = wrap.current
+      if (!el) return v
+      const r = el.getBoundingClientRect()
+      const k = Math.max(0.25, Math.min(2, v.k * f))
+      const mx = r.width / 2
+      const my = r.height / 2
       return {
         k,
         x: mx - ((mx - v.x) * k) / v.k,
         y: my - ((my - v.y) * k) / v.k,
-      };
-    });
+      }
+    })
 
   const startEdit = (id: string) => {
-    if (id !== ROOT) setEditing(id);
-  };
+    if (id !== ROOT) setEditing(id)
+  }
   const stopEdit = () => {
-    setEditing(null);
-    wrap.current?.focus();
-  };
+    setEditing(null)
+    wrap.current?.focus()
+  }
 
   const update = (id: string, fn: (t: Task) => void) =>
     mutate((ts) => {
-      const l = locate(ts, id);
-      if (l) fn(l.task);
-    });
+      const l = locate(ts, id)
+      if (l) fn(l.task)
+    })
 
   const addChildOf = (parentId: string) => {
-    const t = newTask();
-    mutate((ts) => addChild(ts, parentId === ROOT ? null : parentId, t));
-    setSelected(t.id);
-    setEditing(t.id);
-  };
+    const t = newTask()
+    mutate((ts) => addChild(ts, parentId === ROOT ? null : parentId, t))
+    setSelected(t.id)
+    setEditing(t.id)
+  }
   const addSiblingOf = (id: string) => {
-    if (id === ROOT) return addChildOf(ROOT);
-    const t = newTask();
-    mutate((ts) => insertAfter(ts, id, t));
-    setSelected(t.id);
-    setEditing(t.id);
-  };
+    if (id === ROOT) return addChildOf(ROOT)
+    const t = newTask()
+    mutate((ts) => insertAfter(ts, id, t))
+    setSelected(t.id)
+    setEditing(t.id)
+  }
   const removeNode = (id: string) => {
-    if (id === ROOT) return;
-    const loc = locate(project.tasks, id);
-    if (!loc) return;
-    const next =
-      loc.list[loc.index + 1] ?? loc.list[loc.index - 1] ?? loc.parent;
-    mutate((ts) => remove(ts, id));
-    setSelected(next?.id ?? ROOT);
-    setEditing(null);
-  };
+    if (id === ROOT) return
+    const loc = locate(project.tasks, id)
+    if (!loc) return
+    const next = loc.list[loc.index + 1] ?? loc.list[loc.index - 1] ?? loc.parent
+    mutate((ts) => remove(ts, id))
+    setSelected(next?.id ?? ROOT)
+    setEditing(null)
+  }
   /** Chuyển một nhánh cấp 1 sang bên kia nút gốc. */
   const flipSide = (id: string) => {
-    const d = dirOf(id);
-    update(id, (t) => (t.side = d > 0 ? "L" : "R"));
-  };
+    const d = dirOf(id)
+    update(id, (t) => (t.side = d > 0 ? 'L' : 'R'))
+  }
 
-  const rootLevel =
-    selected !== ROOT && project.tasks.some((t) => t.id === selected);
-  const [palette, setPalette] = useState(false);
-  const pickedColor = project.tasks.find((t) => t.id === selected)?.color;
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  const [picker, setPicker] = useState(false)
+  const closeMenu = useCallback(() => setMenu(null), [])
+  const menuTask = menu ? locate(project.tasks, menu.id)?.task : undefined
+
+  /** Mở menu của một nút tại vị trí con trỏ. */
+  const openMenu = (id: string, clientX: number, clientY: number) => {
+    const el = wrap.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    setSelected(id)
+    setPicker(false)
+    setMenu({
+      id,
+      x: Math.max(8, Math.min(clientX - r.left, r.width - 288)),
+      y: Math.max(8, Math.min(clientY - r.top, Math.max(8, r.height - 320))),
+    })
+  }
+
+  const setAllCollapsed = (v: boolean) =>
+    mutate((ts) => {
+      const walk = (list: Task[]) =>
+        list.forEach((t) => {
+          if (t.children.length) t.collapsed = v
+          walk(t.children)
+        })
+      walk(ts)
+    })
+
+  const shownFields = project.table.mapFields
+  const setShownFields = (ids: string[] | null) =>
+    actions.updateProject(project.id, { table: { ...project.table, mapFields: ids } })
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).tagName === "INPUT") return;
-    const loc = selected === ROOT ? null : locate(project.tasks, selected);
-    const go = (id: string | undefined) => id && setSelected(id);
+    if ((e.target as HTMLElement).tagName === 'INPUT') return
+    const loc = selected === ROOT ? null : locate(project.tasks, selected)
+    const go = (id: string | undefined) => id && setSelected(id)
     switch (e.key) {
-      case "Tab":
-        e.preventDefault();
-        addChildOf(selected);
-        break;
-      case "Enter":
-        e.preventDefault();
-        addSiblingOf(selected);
-        break;
-      case "Delete":
-      case "Backspace":
-        e.preventDefault();
-        removeNode(selected);
-        break;
-      case "F2":
-        e.preventDefault();
-        startEdit(selected);
-        break;
-      case " ":
-        e.preventDefault();
-        if (loc) update(selected, (t) => setDone(t, !t.done));
-        break;
-      case "ArrowLeft":
-      case "ArrowRight": {
-        e.preventDefault();
-        const toRight = e.key === "ArrowRight";
+      case 'Tab':
+        e.preventDefault()
+        addChildOf(selected)
+        break
+      case 'Enter':
+        e.preventDefault()
+        addSiblingOf(selected)
+        break
+      case 'Delete':
+      case 'Backspace':
+        e.preventDefault()
+        removeNode(selected)
+        break
+      case 'F2':
+        e.preventDefault()
+        startEdit(selected)
+        break
+      case ' ':
+        e.preventDefault()
+        if (loc) update(selected, (t) => setDone(t, !t.done))
+        break
+      case 'ArrowLeft':
+      case 'ArrowRight': {
+        e.preventDefault()
+        const toRight = e.key === 'ArrowRight'
         if (!loc) {
           // Từ nút gốc: sang bên nào thì chọn nhánh đầu tiên của bên đó.
-          go(root.kids.find((k) => k.dir === (toRight ? 1 : -1))?.id);
+          go(root.kids.find((k) => k.dir === (toRight ? 1 : -1))?.id)
         } else if (toRight === dirOf(selected) > 0) {
-          if (loc.task.collapsed)
-            update(selected, (t) => (t.collapsed = false));
-          else go(loc.task.children[0]?.id);
+          if (loc.task.collapsed) update(selected, (t) => (t.collapsed = false))
+          else go(loc.task.children[0]?.id)
         } else {
-          setSelected(loc.parent?.id ?? ROOT);
+          setSelected(loc.parent?.id ?? ROOT)
         }
-        break;
+        break
       }
-      case "ArrowUp":
-        e.preventDefault();
-        if (loc) go(loc.list[loc.index - 1]?.id);
-        break;
-      case "ArrowDown":
-        e.preventDefault();
-        if (loc) go(loc.list[loc.index + 1]?.id);
-        break;
+      case 'ArrowUp':
+        e.preventDefault()
+        if (loc) go(loc.list[loc.index - 1]?.id)
+        break
+      case 'ArrowDown':
+        e.preventDefault()
+        if (loc) go(loc.list[loc.index + 1]?.id)
+        break
     }
-  };
+  }
 
-  const selectedIsTask = selected !== ROOT && !!locate(project.tasks, selected);
+  const selectedIsTask = selected !== ROOT && !!locate(project.tasks, selected)
 
   return (
     <div
       ref={wrap}
-      className={"mindmap" + (dnd ? " is-dragging" : "")}
+      className={'mindmap' + (dnd ? ' is-dragging' : '')}
       tabIndex={0}
       onKeyDown={onKeyDown}
       onPointerDown={(e) => {
-        if (
-          (e.target as HTMLElement).closest(
-            ".mm-node, .mm-toolbar, .mm-zoom, .mm-palette",
-          )
-        )
-          return;
-        pan.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y };
-        e.currentTarget.setPointerCapture(e.pointerId);
+        if ((e.target as HTMLElement).closest('.mm-node, .mm-toolbar, .mm-zoom, .mm-pop')) return
+        pan.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y }
+        e.currentTarget.setPointerCapture(e.pointerId)
       }}
       onPointerMove={(e) => {
-        const d = pan.current;
+        const d = pan.current
         if (d)
           setView((v) => ({
             ...v,
             x: d.x + e.clientX - d.px,
             y: d.y + e.clientY - d.py,
-          }));
+          }))
       }}
       onPointerUp={() => (pan.current = null)}
       onPointerCancel={() => (pan.current = null)}
@@ -646,37 +617,35 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
         <svg className="mm-edges">
           {nodes.flatMap((n) =>
             n.kids.map((k) => {
-              const x1 = k.dir > 0 ? n.x + n.w : n.x;
-              const y1 = n.y + n.h / 2;
-              const x2 = k.dir > 0 ? k.x : k.x + k.w;
-              const y2 = k.y + k.h / 2;
-              const mx = (x1 + x2) / 2;
+              const x1 = k.dir > 0 ? n.x + n.w : n.x
+              const y1 = n.y + n.h / 2
+              const x2 = k.dir > 0 ? k.x : k.x + k.w
+              const y2 = k.y + k.h / 2
+              const mx = (x1 + x2) / 2
               return (
                 <path
                   key={k.id}
-                  className={"mm-branch" + (k.task?.done ? " done" : "")}
-                  style={{ "--bh": k.hue } as CSSProperties}
+                  className={'mm-branch' + (k.task?.done ? ' done' : '')}
+                  style={{ '--bh': k.hue } as CSSProperties}
                   strokeWidth={Math.max(1.4, 3.2 - k.depth * 0.6)}
                   d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
                 />
-              );
+              )
             }),
           )}
         </svg>
 
         {nodes.map((n) => {
-          const t = n.task;
+          const t = n.task
           const cls =
-            "mm-node" +
-            (t ? "" : " root") +
-            (n.dir < 0 && t ? " left" : "") +
-            (selected === n.id ? " selected" : "") +
-            (t?.done ? " done" : "") +
-            (dragSkip?.has(n.id) ? " dragging" : "") +
-            (dnd?.target === n.id && dnd.pos === "child" ? " drop-child" : "") +
-            (n.hue === null
-              ? ""
-              : " mm-branch" + (n.depth === 1 ? " lvl1" : ""));
+            'mm-node' +
+            (t ? '' : ' root') +
+            (n.dir < 0 && t ? ' left' : '') +
+            (selected === n.id ? ' selected' : '') +
+            (t?.done ? ' done' : '') +
+            (dragSkip?.has(n.id) ? ' dragging' : '') +
+            (dnd?.target === n.id && dnd.pos === 'child' ? ' drop-child' : '') +
+            (n.hue === null ? '' : ' mm-branch' + (n.depth === 1 ? ' lvl1' : ''))
           return (
             <div
               key={n.id}
@@ -687,12 +656,17 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
                   top: n.y,
                   width: n.w,
                   height: n.h,
-                  "--bh": n.hue ?? undefined,
+                  '--bh': n.hue ?? undefined,
                 } as CSSProperties
               }
               onPointerDown={(e) => startNodeDrag(e, n)}
               onClick={() => setSelected(n.id)}
               onDoubleClick={() => startEdit(n.id)}
+              onContextMenu={(e) => {
+                if (!t) return
+                e.preventDefault()
+                openMenu(n.id, e.clientX, e.clientY)
+              }}
             >
               <div className="mm-line">
                 {t && (
@@ -701,9 +675,7 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
                     className="check"
                     checked={t.done}
                     tabIndex={-1}
-                    onChange={(e) =>
-                      update(t.id, (x) => setDone(x, e.target.checked))
-                    }
+                    onChange={(e) => update(t.id, (x) => setDone(x, e.target.checked))}
                   />
                 )}
                 {t && editing === t.id ? (
@@ -712,30 +684,22 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
                     autoFocus
                     value={t.title}
                     placeholder="Công việc…"
-                    onChange={(e) =>
-                      update(t.id, (x) => (x.title = e.target.value))
-                    }
-                    onBlur={() =>
-                      setEditing((cur) => (cur === t.id ? null : cur))
-                    }
+                    onChange={(e) => update(t.id, (x) => (x.title = e.target.value))}
+                    onBlur={() => setEditing((cur) => (cur === t.id ? null : cur))}
                     onKeyDown={(e) => {
-                      if (e.nativeEvent.isComposing) return;
-                      if (e.key === "Enter" || e.key === "Escape") {
-                        e.preventDefault();
-                        stopEdit();
-                      } else if (e.key === "Tab") {
-                        e.preventDefault();
-                        addChildOf(t.id);
+                      if (e.nativeEvent.isComposing) return
+                      if (e.key === 'Enter' || e.key === 'Escape') {
+                        e.preventDefault()
+                        stopEdit()
+                      } else if (e.key === 'Tab') {
+                        e.preventDefault()
+                        addChildOf(t.id)
                       }
                     }}
                   />
                 ) : (
-                  <span
-                    className={
-                      "mm-title" + (t && !t.title ? " placeholder" : "")
-                    }
-                  >
-                    {t ? t.title || "Công việc…" : n.title}
+                  <span className={'mm-title' + (t && !t.title ? ' placeholder' : '')}>
+                    {t ? t.title || 'Công việc…' : n.title}
                   </span>
                 )}
                 {t?.notes && <span className="has-notes">📝</span>}
@@ -744,56 +708,58 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
                 <div className="mm-meta">
                   {n.chips.map((c) =>
                     c.color === null ? (
-                      <span
-                        key={c.key}
-                        className={"meta" + (c.late ? " late" : "")}
-                        title={c.title}
-                      >
+                      <span key={c.key} className={'meta' + (c.late ? ' late' : '')} title={c.title}>
                         {c.label}
                       </span>
                     ) : (
-                      <span
-                        key={c.key}
-                        className={`chip c${c.color % COLORS}`}
-                        title={c.title}
-                      >
+                      <span key={c.key} className={`chip c${c.color % COLORS}`} title={c.title}>
                         {c.label}
                       </span>
                     ),
                   )}
                 </div>
               )}
+              {t && selected === n.id && (
+                <button
+                  className="mm-dots"
+                  tabIndex={-1}
+                  title="Mở menu (hoặc bấm chuột phải)"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openMenu(n.id, e.clientX, e.clientY)
+                  }}
+                >
+                  ⋮
+                </button>
+              )}
               {t && t.children.length > 0 && (
                 <button
                   className="mm-toggle"
                   tabIndex={-1}
-                  title={t.collapsed ? "Mở rộng" : "Thu gọn"}
+                  title={t.collapsed ? 'Mở rộng' : 'Thu gọn'}
                   onClick={(e) => {
-                    e.stopPropagation();
-                    update(t.id, (x) => (x.collapsed = !x.collapsed));
+                    e.stopPropagation()
+                    update(t.id, (x) => (x.collapsed = !x.collapsed))
                   }}
                 >
-                  {t.collapsed ? t.children.length : "–"}
+                  {t.collapsed ? t.children.length : '–'}
                 </button>
               )}
             </div>
-          );
+          )
         })}
 
-        {dnd && dropNode && dnd.pos !== "child" && (
+        {dnd && dropNode && dnd.pos !== 'child' && (
           <div
             className="mm-dropline"
             style={{
               left: dropNode.x,
               width: dropNode.w,
-              top:
-                (dnd.pos === "before"
-                  ? dropNode.y - VGAP / 2
-                  : dropNode.y + dropNode.h + VGAP / 2) - 1.5,
+              top: (dnd.pos === 'before' ? dropNode.y - VGAP / 2 : dropNode.y + dropNode.h + VGAP / 2) - 1.5,
             }}
           />
         )}
-        {dnd && dropNode && dnd.pos === "child" && (
+        {dnd && dropNode && dnd.pos === 'child' && (
           <div
             className="mm-dropslot"
             style={{
@@ -803,10 +769,7 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
           />
         )}
         {dnd && (
-          <div
-            className="mm-ghost"
-            style={{ left: dnd.x + 10, top: dnd.y + 10 }}
-          >
+          <div className="mm-ghost" style={{ left: dnd.x + 10, top: dnd.y + 10 }}>
             {dnd.title}
           </div>
         )}
@@ -816,78 +779,76 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
         <button onClick={() => addChildOf(selected)} title="Tab">
           ＋ Nhánh con
         </button>
-        <button
-          onClick={() => addSiblingOf(selected)}
-          disabled={!selectedIsTask}
-          title="Enter"
-        >
+        <button onClick={() => addSiblingOf(selected)} disabled={!selectedIsTask} title="Enter">
           ＋ Cùng cấp
         </button>
-        <button
-          onClick={() => startEdit(selected)}
-          disabled={!selectedIsTask}
-          title="F2 hoặc nhấp đúp"
-        >
-          ✎ Sửa
-        </button>
-        <button
-          onClick={() => flipSide(selected)}
-          disabled={!rootLevel}
-          title="Chuyển nhánh sang bên kia nút gốc"
-        >
-          ⇄ Đổi bên
-        </button>
-        <button
-          className={palette ? "on" : ""}
-          onClick={() => setPalette((o) => !o)}
-          disabled={!rootLevel}
-          title="Đổi màu nhánh"
-        >
-          ◍ Màu
-        </button>
-        <button
-          onClick={() => onOpenDetail(selected)}
-          disabled={!selectedIsTask}
-        >
-          ⤢ Chi tiết
-        </button>
-        <button
-          className="danger"
-          onClick={() => removeNode(selected)}
-          disabled={!selectedIsTask}
-          title="Delete"
-        >
+        <button className="danger" onClick={() => removeNode(selected)} disabled={!selectedIsTask} title="Delete">
           ✕ Xoá
+        </button>
+        <span className="mm-sep" />
+        <button onClick={() => setAllCollapsed(true)} title="Thu gọn mọi nhánh">
+          ⊟ Thu gọn
+        </button>
+        <button onClick={() => setAllCollapsed(false)} title="Mở mọi nhánh">
+          ⊞ Mở rộng
+        </button>
+        <button
+          className={picker ? 'on' : ''}
+          onClick={() => setPicker((o) => !o)}
+          title="Chọn thông tin hiện trên nút"
+        >
+          🏷 Nhãn
         </button>
       </div>
 
-      {palette && rootLevel && (
-        <div className="mm-palette">
-          {HUES.map((h, i) => (
-            <button
-              key={h}
-              className={
-                "mm-swatch mm-branch" + (pickedColor === i ? " on" : "")
-              }
-              style={{ "--bh": h } as CSSProperties}
-              title={"Màu " + (i + 1)}
-              onClick={() => {
-                update(selected, (t) => (t.color = i));
-                setPalette(false);
-              }}
-            />
+      {picker && (
+        <div className="mm-pop mm-fieldpick">
+          <div className="menu-label">Hiện trên nút</div>
+          {project.fields.map((f) => (
+            <label key={f.id}>
+              <input
+                type="checkbox"
+                className="check"
+                checked={shownFields === null || shownFields.includes(f.id)}
+                onChange={(e) => {
+                  const cur = shownFields ?? project.fields.map((x) => x.id)
+                  const next = e.target.checked ? [...cur, f.id] : cur.filter((id) => id !== f.id)
+                  setShownFields(next.length === project.fields.length ? null : next)
+                }}
+              />
+              {f.name || 'Trường'}
+            </label>
           ))}
-          <button
-            className="mm-swatch-auto"
-            title="Để app tự chọn màu cho nhánh này"
-            onClick={() => {
-              update(selected, (t) => delete t.color);
-              setPalette(false);
-            }}
-          >
-            Tự động
-          </button>
+          {project.fields.length === 0 && <div className="menu-label">Dự án chưa có trường nào.</div>}
+          <div className="fieldpick-row">
+            <button className="btn ghost" onClick={() => setShownFields(null)}>
+              Tất cả
+            </button>
+            <button className="btn ghost" onClick={() => setShownFields([])}>
+              Không hiện
+            </button>
+          </div>
         </div>
+      )}
+
+      {menu && menuTask && (
+        <NodeMenu
+          project={project}
+          task={menuTask}
+          x={menu.x}
+          y={menu.y}
+          rootLevel={project.tasks.some((t) => t.id === menu.id)}
+          update={update}
+          on={{
+            addChild: () => addChildOf(menu.id),
+            addSibling: () => addSiblingOf(menu.id),
+            rename: () => startEdit(menu.id),
+            detail: () => onOpenDetail(menu.id),
+            remove: () => removeNode(menu.id),
+            flip: () => flipSide(menu.id),
+          }}
+          onClose={closeMenu}
+        />
       )}
 
       <div className="mm-zoom">
@@ -904,16 +865,11 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
           Chọn nút dự án rồi nhấn <kbd>Tab</kbd> để thêm công việc đầu tiên
         </div>
       )}
-      {project.title === "" && project.tasks.length === 0 && (
-        <button
-          className="mm-name btn ghost"
-          onClick={() =>
-            actions.updateProject(project.id, { title: "Dự án mới" })
-          }
-        >
+      {project.title === '' && project.tasks.length === 0 && (
+        <button className="mm-name btn ghost" onClick={() => actions.updateProject(project.id, { title: 'Dự án mới' })}>
           Đặt tên dự án
         </button>
       )}
     </div>
-  );
+  )
 }
