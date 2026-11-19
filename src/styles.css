@@ -413,3 +413,7 @@ kbd {
 .kcol-new { background: none; width: 200px; padding: 4px; }
 .kanban-view .tb-item .pop { right: auto; width: 270px; }
 @media (max-width: 760px) { .kanban { padding: 4px 12px 16px; } .kcol { width: 250px; } }
+
+/* Mindmap hai bên */
+.mm-node.left .mm-toggle { right: auto; left: -10px; }
+.mm-dropslot { position: absolute; width: 3px; height: 26px; border-radius: 2px; background: var(--accent); pointer-events: none; }

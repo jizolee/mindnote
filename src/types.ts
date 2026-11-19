@@ -42,6 +42,8 @@ export interface Task {
   done: boolean
   notes: string
   collapsed: boolean
+  /** Nhánh cấp 1 đã được ghim sang bên nào của nút gốc trong mindmap. */
+  side?: 'L' | 'R'
   /** Giá trị các trường, theo id của Field. */
   props: Record<string, PropValue>
   children: Task[]

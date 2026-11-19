@@ -16,8 +16,13 @@ const ROOT = '__root__'
 const H = 38
 const VGAP = 14
 const HGAP = 64
+/** Bán kính tìm vị trí thả gần nhất khi con trỏ không nằm trên nút nào (toạ độ canvas). */
+const SNAP = 260
 const FONT = '14px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
 const ROOT_FONT = '600 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+
+/** Hướng nhánh mọc ra từ nút gốc: 1 = sang phải, -1 = sang trái. */
+type Dir = 1 | -1
 
 interface LNode {
   id: string
@@ -26,7 +31,9 @@ interface LNode {
   x: number
   y: number
   w: number
+  /** Chiều cao cả nhánh (gồm các nút con). */
   sh: number
+  dir: Dir
   kids: LNode[]
 }
 
@@ -38,11 +45,48 @@ function textWidth(text: string, font: string): number {
   return ctx2d.measureText(text).width
 }
 
+const stackHeight = (list: LNode[]) => list.reduce((s, k) => s + k.sh, 0) + VGAP * Math.max(0, list.length - 1)
+
+/**
+ * Chia các nhánh cấp 1 sang hai bên nút gốc: nhánh đã được ghim (`task.side`) giữ nguyên bên,
+ * các nhánh còn lại cắt thành hai đoạn liền nhau sao cho hai bên cân chiều cao nhất.
+ */
+function splitSides(kids: LNode[]): Map<string, Dir> {
+  const sides = new Map<string, Dir>()
+  const free: LNode[] = []
+  const pinned = { 1: [] as LNode[], [-1]: [] as LNode[] }
+  for (const k of kids) {
+    const s = k.task?.side
+    if (s === 'R') {
+      sides.set(k.id, 1)
+      pinned[1].push(k)
+    } else if (s === 'L') {
+      sides.set(k.id, -1)
+      pinned[-1].push(k)
+    } else {
+      free.push(k)
+    }
+  }
+  let cut = 0
+  let bestDiff = Infinity
+  for (let i = 0; i <= free.length; i++) {
+    const diff = Math.abs(
+      stackHeight([...pinned[1], ...free.slice(0, i)]) - stackHeight([...pinned[-1], ...free.slice(i)]),
+    )
+    if (diff < bestDiff) {
+      bestDiff = diff
+      cut = i
+    }
+  }
+  free.forEach((k, i) => sides.set(k.id, i < cut ? 1 : -1))
+  return sides
+}
+
 function layout(project: Project): { nodes: LNode[]; root: LNode } {
   const make = (t: Task): LNode => {
     const text = t.title || 'Công việc…'
     const w = Math.min(320, Math.max(96, textWidth(text, FONT) + 58 + (t.notes ? 20 : 0)))
-    return { id: t.id, title: t.title, task: t, x: 0, y: 0, w, sh: H, kids: t.collapsed ? [] : t.children.map(make) }
+    return { id: t.id, title: t.title, task: t, x: 0, y: 0, w, sh: H, dir: 1, kids: t.collapsed ? [] : t.children.map(make) }
   }
   const rootText = `${project.icon} ${project.title || 'Chưa đặt tên'}`
   const root: LNode = {
@@ -53,27 +97,57 @@ function layout(project: Project): { nodes: LNode[]; root: LNode } {
     y: 0,
     w: Math.min(360, textWidth(rootText, ROOT_FONT) + 36),
     sh: H,
+    dir: 1,
     kids: project.tasks.map(make),
   }
-  const kidsHeight = (n: LNode) => n.kids.reduce((s, k) => s + k.sh, 0) + VGAP * Math.max(0, n.kids.length - 1)
+
+  const kidsHeight = (n: LNode) => stackHeight(n.kids)
   const measure = (n: LNode) => {
     n.kids.forEach(measure)
     n.sh = Math.max(H, kidsHeight(n))
   }
+  root.kids.forEach(measure)
+
+  const sides = splitSides(root.kids)
+  const right = root.kids.filter((k) => sides.get(k.id) === 1)
+  const left = root.kids.filter((k) => sides.get(k.id) === -1)
+
   const nodes: LNode[] = []
-  const place = (n: LNode, x: number, top: number) => {
+  const place = (n: LNode, x: number, top: number, dir: Dir) => {
+    n.dir = dir
     n.x = x
     n.y = top + n.sh / 2 - H / 2
     nodes.push(n)
     let cy = top + (n.sh - kidsHeight(n)) / 2
     for (const k of n.kids) {
-      place(k, x + n.w + HGAP, cy)
+      place(k, dir > 0 ? x + n.w + HGAP : x - HGAP - k.w, cy, dir)
       cy += k.sh + VGAP
     }
   }
-  measure(root)
-  place(root, 0, 0)
+
+  const hr = stackHeight(right)
+  const hl = stackHeight(left)
+  root.sh = Math.max(H, hr, hl)
+  root.x = 0
+  root.y = -H / 2
+  nodes.push(root)
+  let cy = -hr / 2
+  for (const k of right) {
+    place(k, root.w + HGAP, cy, 1)
+    cy += k.sh + VGAP
+  }
+  cy = -hl / 2
+  for (const k of left) {
+    place(k, -HGAP - k.w, cy, -1)
+    cy += k.sh + VGAP
+  }
   return { nodes, root }
+}
+
+interface Drop {
+  target: string
+  pos: DropPos
+  dir: Dir
 }
 
 interface Dnd {
@@ -84,6 +158,7 @@ interface Dnd {
   y: number
   target: string | null
   pos: DropPos
+  dir: Dir
 }
 
 function subtreeIds(n: LNode, out = new Set<string>()): Set<string> {
@@ -92,18 +167,56 @@ function subtreeIds(n: LNode, out = new Set<string>()): Set<string> {
   return out
 }
 
-/** Tìm nút đích và kiểu thả tại toạ độ canvas (x, y), bỏ qua các nút trong `skip`. */
-function hitTest(nodes: LNode[], skip: Set<string>, x: number, y: number): { target: string; pos: DropPos } | null {
+/** Điểm neo của chỗ thả "làm nhánh con của n", nằm giữa n và hàng con của nó. */
+const childAnchor = (n: LNode, dir: Dir) => ({
+  x: dir > 0 ? n.x + n.w + HGAP / 2 : n.x - HGAP / 2,
+  y: n.y + H / 2,
+})
+
+/**
+ * Tìm chỗ thả tại toạ độ canvas (x, y): ưu tiên nút đang trỏ vào, nếu con trỏ ở khoảng trống
+ * thì lấy chỗ thả gần nhất trong bán kính SNAP. Bỏ qua các nút trong `skip`.
+ */
+function dropAt(nodes: LNode[], skip: Set<string>, x: number, y: number): Drop | null {
   for (const n of nodes) {
     if (skip.has(n.id)) continue
-    if (x < n.x - 8 || x > n.x + n.w + HGAP / 2) continue
+    const isRoot = n.id === ROOT
+    const padIn = 12
+    const padOut = HGAP / 2
+    if (x < n.x - (isRoot || n.dir < 0 ? padOut : padIn)) continue
+    if (x > n.x + n.w + (isRoot || n.dir > 0 ? padOut : padIn)) continue
     if (y < n.y - VGAP / 2 || y > n.y + H + VGAP / 2) continue
-    if (n.id === ROOT) return { target: ROOT, pos: 'child' }
-    if (y < n.y + 9) return { target: n.id, pos: 'before' }
-    if (y > n.y + H - 9) return { target: n.id, pos: 'after' }
-    return { target: n.id, pos: 'child' }
+    if (isRoot) return { target: ROOT, pos: 'child', dir: x < n.x + n.w / 2 ? -1 : 1 }
+    const edge = H * 0.3
+    if (y < n.y + edge) return { target: n.id, pos: 'before', dir: n.dir }
+    if (y > n.y + H - edge) return { target: n.id, pos: 'after', dir: n.dir }
+    return { target: n.id, pos: 'child', dir: n.dir }
   }
-  return null
+
+  let best: Drop | null = null
+  let bestD = SNAP * SNAP
+  const consider = (d: Drop, ax: number, ay: number) => {
+    const dist = (ax - x) ** 2 + (ay - y) ** 2
+    if (dist < bestD) {
+      bestD = dist
+      best = d
+    }
+  }
+  for (const n of nodes) {
+    if (skip.has(n.id)) continue
+    if (n.id === ROOT) {
+      for (const dir of [1, -1] as Dir[]) {
+        const a = childAnchor(n, dir)
+        consider({ target: ROOT, pos: 'child', dir }, a.x, a.y)
+      }
+      continue
+    }
+    const a = childAnchor(n, n.dir)
+    consider({ target: n.id, pos: 'child', dir: n.dir }, a.x, a.y)
+    consider({ target: n.id, pos: 'before', dir: n.dir }, n.x + n.w / 2, n.y - VGAP / 2)
+    consider({ target: n.id, pos: 'after', dir: n.dir }, n.x + n.w / 2, n.y + H + VGAP / 2)
+  }
+  return best
 }
 
 interface Props {
@@ -117,9 +230,10 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
   const [view, setView] = useState({ x: 60, y: 60, k: 1 })
   const [selected, setSelected] = useState<string>(ROOT)
   const [editing, setEditing] = useState<string | null>(null)
-  const drag = useRef<{ px: number; py: number; x: number; y: number } | null>(null)
+  const pan = useRef<{ px: number; py: number; x: number; y: number } | null>(null)
 
-  const { nodes } = useMemo(() => layout(project), [project])
+  const { nodes, root } = useMemo(() => layout(project), [project])
+  const dirOf = (id: string): Dir => nodes.find((n) => n.id === id)?.dir ?? 1
 
   // --- Kéo-thả nút ---
   const [dnd, setDnd] = useState<Dnd | null>(null)
@@ -153,9 +267,17 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
       const r = el.getBoundingClientRect()
       const x = (ev.clientX - r.left - v.x) / v.k
       const y = (ev.clientY - r.top - v.y) / v.k
-      const hit = hitTest(ns, skip, x, y)
+      const hit = dropAt(ns, skip, x, y)
       const ok = hit && canMove(p.tasks, id, hit.target === ROOT ? null : hit.target)
-      cur = { id, title, x, y, target: ok ? hit.target : null, pos: ok ? hit.pos : 'child' }
+      cur = {
+        id,
+        title,
+        x,
+        y,
+        target: ok ? hit.target : null,
+        pos: ok ? hit.pos : 'child',
+        dir: ok ? hit.dir : 1,
+      }
       setDnd(cur)
     }
     const finish = (commit: boolean) => {
@@ -165,8 +287,15 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
       window.removeEventListener('keydown', onKey, true)
       cleanupDrag.current = null
       if (commit && cur?.target) {
-        const { target, pos } = cur
-        mutate((ts) => move(ts, id, target === ROOT ? null : target, pos))
+        const { target, pos, dir } = cur
+        mutate((ts) => {
+          move(ts, id, target === ROOT ? null : target, pos)
+          const l = locate(ts, id)
+          if (!l) return
+          // Ở cấp gốc thì ghim bên vừa thả; thành nhánh con thì bên do nhánh cha quyết định.
+          if (l.parent) delete l.task.side
+          else l.task.side = dir > 0 ? 'R' : 'L'
+        })
       }
       setDnd(null)
     }
@@ -196,13 +325,14 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
     const el = wrap.current
     if (!el) return
     const { width, height } = el.getBoundingClientRect()
+    const minX = Math.min(...nodes.map((n) => n.x))
     const maxX = Math.max(...nodes.map((n) => n.x + n.w))
     const minY = Math.min(...nodes.map((n) => n.y))
     const maxY = Math.max(...nodes.map((n) => n.y + H))
-    const bw = maxX
+    const bw = maxX - minX
     const bh = maxY - minY
     const k = Math.max(0.3, Math.min(1, (width - 96) / bw, (height - 120) / bh))
-    setView({ k, x: (width - bw * k) / 2, y: (height - bh * k) / 2 - minY * k })
+    setView({ k, x: (width - bw * k) / 2 - minX * k, y: (height - bh * k) / 2 - minY * k })
   }, [nodes])
 
   // Căn vừa khung một lần khi mở mindmap.
@@ -251,6 +381,12 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
     wrap.current?.focus()
   }
 
+  const update = (id: string, fn: (t: Task) => void) =>
+    mutate((ts) => {
+      const l = locate(ts, id)
+      if (l) fn(l.task)
+    })
+
   const addChildOf = (parentId: string) => {
     const t = newTask()
     mutate((ts) => addChild(ts, parentId === ROOT ? null : parentId, t))
@@ -273,11 +409,13 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
     setSelected(next?.id ?? ROOT)
     setEditing(null)
   }
-  const update = (id: string, fn: (t: Task) => void) =>
-    mutate((ts) => {
-      const l = locate(ts, id)
-      if (l) fn(l.task)
-    })
+  /** Chuyển một nhánh cấp 1 sang bên kia nút gốc. */
+  const flipSide = (id: string) => {
+    const d = dirOf(id)
+    update(id, (t) => (t.side = d > 0 ? 'L' : 'R'))
+  }
+
+  const rootLevel = selected !== ROOT && project.tasks.some((t) => t.id === selected)
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).tagName === 'INPUT') return
@@ -306,15 +444,20 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
         if (loc) update(selected, (t) => setDone(t, !t.done))
         break
       case 'ArrowLeft':
+      case 'ArrowRight': {
         e.preventDefault()
-        if (loc) setSelected(loc.parent?.id ?? ROOT)
+        const toRight = e.key === 'ArrowRight'
+        if (!loc) {
+          // Từ nút gốc: sang bên nào thì chọn nhánh đầu tiên của bên đó.
+          go(root.kids.find((k) => k.dir === (toRight ? 1 : -1))?.id)
+        } else if (toRight === dirOf(selected) > 0) {
+          if (loc.task.collapsed) update(selected, (t) => (t.collapsed = false))
+          else go(loc.task.children[0]?.id)
+        } else {
+          setSelected(loc.parent?.id ?? ROOT)
+        }
         break
-      case 'ArrowRight':
-        e.preventDefault()
-        if (!loc) go(project.tasks[0]?.id)
-        else if (loc.task.collapsed) update(selected, (t) => (t.collapsed = false))
-        else go(loc.task.children[0]?.id)
-        break
+      }
       case 'ArrowUp':
         e.preventDefault()
         if (loc) go(loc.list[loc.index - 1]?.id)
@@ -336,26 +479,23 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
       onKeyDown={onKeyDown}
       onPointerDown={(e) => {
         if ((e.target as HTMLElement).closest('.mm-node, .mm-toolbar, .mm-zoom')) return
-        drag.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y }
+        pan.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y }
         e.currentTarget.setPointerCapture(e.pointerId)
       }}
       onPointerMove={(e) => {
-        const d = drag.current
+        const d = pan.current
         if (d) setView((v) => ({ ...v, x: d.x + e.clientX - d.px, y: d.y + e.clientY - d.py }))
       }}
-      onPointerUp={() => (drag.current = null)}
-      onPointerCancel={() => (drag.current = null)}
+      onPointerUp={() => (pan.current = null)}
+      onPointerCancel={() => (pan.current = null)}
     >
-      <div
-        className="mm-canvas"
-        style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}
-      >
+      <div className="mm-canvas" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
         <svg className="mm-edges">
           {nodes.flatMap((n) =>
             n.kids.map((k) => {
-              const x1 = n.x + n.w
+              const x1 = k.dir > 0 ? n.x + n.w : n.x
               const y1 = n.y + H / 2
-              const x2 = k.x
+              const x2 = k.dir > 0 ? k.x : k.x + k.w
               const y2 = k.y + H / 2
               const mx = (x1 + x2) / 2
               return (
@@ -374,6 +514,7 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
           const cls =
             'mm-node' +
             (t ? '' : ' root') +
+            (n.dir < 0 && t ? ' left' : '') +
             (selected === n.id ? ' selected' : '') +
             (t?.done ? ' done' : '') +
             (dragSkip?.has(n.id) ? ' dragging' : '') +
@@ -448,6 +589,12 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
             }}
           />
         )}
+        {dnd && dropNode && dnd.pos === 'child' && (
+          <div
+            className="mm-dropslot"
+            style={{ left: childAnchor(dropNode, dnd.dir).x - 1.5, top: dropNode.y + H / 2 - 13 }}
+          />
+        )}
         {dnd && (
           <div className="mm-ghost" style={{ left: dnd.x + 10, top: dnd.y + 10 }}>
             {dnd.title}
@@ -464,6 +611,9 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
         </button>
         <button onClick={() => startEdit(selected)} disabled={!selectedIsTask} title="F2 hoặc nhấp đúp">
           ✎ Sửa
+        </button>
+        <button onClick={() => flipSide(selected)} disabled={!rootLevel} title="Chuyển nhánh sang bên kia nút gốc">
+          ⇄ Đổi bên
         </button>
         <button onClick={() => onOpenDetail(selected)} disabled={!selectedIsTask}>
           ⤢ Chi tiết
