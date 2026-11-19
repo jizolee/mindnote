@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { COLORS, FIELD_TYPES, fmtDate, isOverdue, newField, typeIcon } from '../fields'
+import { COLORS, FIELD_TYPES, fieldChips, isOverdue, newField, typeIcon } from '../fields'
 import { actions } from '../store'
 import { locate, uid } from '../tree'
 import type { Field, FieldOption, Mutate, Project, PropValue, Task } from '../types'
@@ -13,37 +13,23 @@ function Chip({ opt }: { opt: FieldOption }) {
 
 /** Các giá trị trường hiển thị gọn trên một dòng task. */
 export function RowChips({ fields, task }: { fields: Field[]; task: Task }) {
-  const out: JSX.Element[] = []
-  for (const f of fields) {
-    const v = task.props[f.id]
-    if (v === undefined || v === '' || v === false) continue
-    if (f.type === 'select' || f.type === 'multi') {
-      for (const id of asList(v)) {
-        const o = f.options.find((x) => x.id === id)
-        if (o) out.push(<Chip key={f.id + id} opt={o} />)
-      }
-    } else if (f.type === 'date') {
-      const late = !task.done && isOverdue(String(v))
-      out.push(
-        <span key={f.id} className={'meta' + (late ? ' late' : '')} title={f.name + (late ? ' · quá hạn' : '')}>
-          📅 {fmtDate(String(v))}
-        </span>,
-      )
-    } else if (f.type === 'checkbox') {
-      out.push(
-        <span key={f.id} className="meta" title={f.name}>
-          ☑ {f.name}
-        </span>,
-      )
-    } else {
-      out.push(
-        <span key={f.id} className="meta" title={f.name}>
-          {String(v)}
-        </span>,
-      )
-    }
-  }
-  return out.length ? <div className="row-chips">{out}</div> : null
+  const chips = fieldChips(fields, task)
+  if (chips.length === 0) return null
+  return (
+    <div className="row-chips">
+      {chips.map((c) =>
+        c.color === null ? (
+          <span key={c.key} className={'meta' + (c.late ? ' late' : '')} title={c.title}>
+            {c.label}
+          </span>
+        ) : (
+          <span key={c.key} className={`chip c${c.color % COLORS}`} title={c.title}>
+            {c.label}
+          </span>
+        ),
+      )}
+    </div>
+  )
 }
 
 /** Trạng thái popover dùng chung: một khoá đang mở, tự đóng khi bấm ra ngoài hoặc nhấn Esc. */

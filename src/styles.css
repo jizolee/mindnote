@@ -439,3 +439,12 @@ kbd {
 .mm-swatch.on { outline: 2px solid var(--text); outline-offset: 2px; }
 .mm-swatch-auto { padding: 4px 9px; border-radius: 7px; font-size: 13px; color: var(--muted); }
 .mm-swatch-auto:hover { background: var(--bg-hover); color: var(--text); }
+
+/* Dòng nhãn trường trên nút mindmap */
+.mm-node { flex-direction: column; align-items: stretch; justify-content: center; gap: 1px; padding: 0 11px; }
+.mm-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mm-node.root .mm-line { justify-content: center; }
+.mm-meta { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.mm-meta .chip { font-size: 11px; line-height: 17px; padding: 0 6px; }
+.mm-meta .meta { font-size: 11px; line-height: 15px; padding: 0 5px; border: 1px solid var(--border); border-radius: 4px; }
+.mm-meta .meta.late { border-color: var(--danger); }
