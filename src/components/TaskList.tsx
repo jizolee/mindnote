@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { addChild, indent, insertAfter, locate, newTask, outdent, remove, setDone, visible } from '../tree'
 import type { Field, Mutate, Task } from '../types'
-import { RowChips } from './Fields'
+import { FlagDot, RowChips } from './Fields'
 
 interface Ctx {
   fields: Field[]
@@ -41,8 +41,8 @@ export default function TaskList({ fields, tasks, mutate, detailId, onOpenDetail
       </button>
       {tasks.length > 0 && (
         <p className="hint">
-          <kbd>Enter</kbd> thêm task · <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> thụt vào / ra ·{' '}
-          <kbd>↑</kbd> <kbd>↓</kbd> di chuyển · <kbd>Backspace</kbd> trên dòng trống để xoá
+          <kbd>Enter</kbd> thêm task · <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> thụt vào / ra · <kbd>↑</kbd> <kbd>↓</kbd>{' '}
+          di chuyển · <kbd>Backspace</kbd> trên dòng trống để xoá
         </p>
       )}
     </div>
@@ -104,10 +104,7 @@ function Row({ task, depth, ctx }: { task: Task; depth: number; ctx: Ctx }) {
 
   return (
     <>
-      <div
-        className={'task-row' + (ctx.detailId === task.id ? ' selected' : '')}
-        style={{ paddingLeft: depth * 24 }}
-      >
+      <div className={'task-row' + (ctx.detailId === task.id ? ' selected' : '')} style={{ paddingLeft: depth * 24 }}>
         <button
           className={'caret' + (hasChildren ? '' : ' invisible')}
           tabIndex={-1}
@@ -122,6 +119,7 @@ function Row({ task, depth, ctx }: { task: Task; depth: number; ctx: Ctx }) {
           tabIndex={-1}
           onChange={(e) => update((t) => setDone(t, e.target.checked))}
         />
+        <FlagDot fields={ctx.fields} task={task} />
         <input
           ref={ref}
           className={'task-title' + (task.done ? ' done' : '')}
@@ -131,7 +129,11 @@ function Row({ task, depth, ctx }: { task: Task; depth: number; ctx: Ctx }) {
           onKeyDown={onKeyDown}
         />
         <RowChips fields={ctx.fields} task={task} />
-        {task.notes && <span className="has-notes" title="Có ghi chú">📝</span>}
+        {task.notes && (
+          <span className="has-notes" title="Có ghi chú">
+            📝
+          </span>
+        )}
         {task.collapsed && hasChildren && <span className="badge">{task.children.length}</span>}
         <div className="row-actions">
           <button className="icon-btn" title="Thêm subtask" tabIndex={-1} onClick={addSub}>
@@ -155,8 +157,7 @@ function Row({ task, depth, ctx }: { task: Task; depth: number; ctx: Ctx }) {
           </button>
         </div>
       </div>
-      {!task.collapsed &&
-        task.children.map((c) => <Row key={c.id} task={c} depth={depth + 1} ctx={ctx} />)}
+      {!task.collapsed && task.children.map((c) => <Row key={c.id} task={c} depth={depth + 1} ctx={ctx} />)}
     </>
   )
 }

@@ -41,10 +41,7 @@ function seed(): AppState {
     fields,
     table: emptyTable(),
     tasks: [
-      t('Thiết kế', [
-        t('Wireframe trang chủ', [], true),
-        t('Bộ nhận diện', [t('Logo', [], true), t('Bảng màu')]),
-      ]),
+      t('Thiết kế', [t('Wireframe trang chủ', [], true), t('Bộ nhận diện', [t('Logo', [], true), t('Bảng màu')])]),
       t('Phát triển', [
         t('Frontend', [t('Trang chủ'), t('Trang liên hệ')], false, {
           [status.id]: opt(status, 'Đang làm'),
@@ -104,7 +101,12 @@ function normProject(r: any): Project | null {
       filters: Array.isArray(r.table?.filters)
         ? r.table.filters
             .filter((f: any) => f && typeof f.fieldId === 'string' && typeof f.op === 'string')
-            .map((f: any) => ({ id: typeof f.id === 'string' ? f.id : uid(), fieldId: f.fieldId, op: f.op, value: String(f.value ?? '') }))
+            .map((f: any) => ({
+              id: typeof f.id === 'string' ? f.id : uid(),
+              fieldId: f.fieldId,
+              op: f.op,
+              value: String(f.value ?? ''),
+            }))
         : [],
       sort:
         r.table?.sort && typeof r.table.sort.fieldId === 'string'

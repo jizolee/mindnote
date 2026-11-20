@@ -67,7 +67,12 @@ export default function TaskDetail({ project, taskId, mutate, onNavigate, onClos
       />
 
       <div className="detail-label">
-        Subtask {c.total > 0 && <span className="muted">· {c.done}/{c.total}</span>}
+        Subtask{' '}
+        {c.total > 0 && (
+          <span className="muted">
+            · {c.done}/{c.total}
+          </span>
+        )}
       </div>
       <div className="detail-subs">
         {task.children.map((s) => (

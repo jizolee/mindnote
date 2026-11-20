@@ -6,6 +6,8 @@ export interface FieldOption {
   id: string
   label: string
   color: number
+  /** Công việc mang lựa chọn này được làm nổi bật (chấm tròn + chữ đậm). */
+  flag?: boolean
 }
 
 /** Định nghĩa một trường (property) dùng chung cho mọi task trong dự án. */

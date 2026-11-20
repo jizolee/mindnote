@@ -91,7 +91,12 @@ export default function Sidebar({ projects, activeId, onClose }: Props) {
       </button>
 
       <div className="sidebar-foot">
-        <button className="btn ghost" onClick={exportJson} disabled={projects.length === 0} title="Tải toàn bộ dự án về một file JSON">
+        <button
+          className="btn ghost"
+          onClick={exportJson}
+          disabled={projects.length === 0}
+          title="Tải toàn bộ dự án về một file JSON"
+        >
           ⭳ Xuất dữ liệu
         </button>
         <button className="btn ghost" onClick={() => file.current?.click()} title="Nạp dự án từ file JSON đã xuất">
@@ -153,7 +158,11 @@ export default function Sidebar({ projects, activeId, onClose }: Props) {
                     <button className="btn ghost" onClick={() => setIncoming(null)}>
                       Huỷ
                     </button>
-                    <button className="btn danger-outline" onClick={() => finish('replace')} title="Xoá mọi dự án đang có, chỉ giữ dự án trong file">
+                    <button
+                      className="btn danger-outline"
+                      onClick={() => finish('replace')}
+                      title="Xoá mọi dự án đang có, chỉ giữ dự án trong file"
+                    >
                       Thay thế toàn bộ
                     </button>
                     <button className="btn primary" onClick={() => finish('merge')}>
@@ -161,8 +170,8 @@ export default function Sidebar({ projects, activeId, onClose }: Props) {
                     </button>
                   </div>
                   <p className="modal-note">
-                    Gộp: giữ các dự án đang có{dup > 0 ? ', riêng dự án trùng sẽ bị ghi đè bằng bản trong file' : ''}. Thay
-                    thế: xoá toàn bộ {projects.length} dự án đang có.
+                    Gộp: giữ các dự án đang có{dup > 0 ? ', riêng dự án trùng sẽ bị ghi đè bằng bản trong file' : ''}.
+                    Thay thế: xoá toàn bộ {projects.length} dự án đang có.
                   </p>
                 </>
               )

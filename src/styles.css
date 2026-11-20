@@ -272,14 +272,16 @@ kbd {
 
 /* Trường (properties) */
 .chip { display: inline-block; padding: 0 7px; border-radius: 4px; font-size: 12px; line-height: 20px; white-space: nowrap; }
-.chip.c0 { background: hsl(215 80% 55% / 0.2); }
-.chip.c1 { background: hsl(265 70% 60% / 0.2); }
-.chip.c2 { background: hsl(150 60% 42% / 0.22); }
-.chip.c3 { background: hsl(42 90% 50% / 0.26); }
-.chip.c4 { background: hsl(325 70% 58% / 0.2); }
-.chip.c5 { background: hsl(4 80% 58% / 0.22); }
-.chip.c6 { background: hsl(185 70% 42% / 0.22); }
-.chip.c7 { background: hsl(40 6% 50% / 0.22); }
+.chip.c0, .flag-dot.c0 { --c: 215 80% 55%; }
+.chip.c1, .flag-dot.c1 { --c: 265 70% 60%; }
+.chip.c2, .flag-dot.c2 { --c: 150 60% 42%; }
+.chip.c3, .flag-dot.c3 { --c: 42 90% 50%; }
+.chip.c4, .flag-dot.c4 { --c: 325 70% 58%; }
+.chip.c5, .flag-dot.c5 { --c: 4 80% 58%; }
+.chip.c6, .flag-dot.c6 { --c: 185 70% 42%; }
+.chip.c7, .flag-dot.c7 { --c: 40 6% 50%; }
+.chip { background: hsl(var(--c) / 0.22); }
+.chip.flag { font-weight: 600; box-shadow: inset 0 0 0 1.5px hsl(var(--c) / 0.7); }
 .row-chips { display: flex; align-items: center; gap: 5px; flex: 0 1 auto; min-width: 0; max-width: 55%; overflow: hidden; white-space: nowrap; }
 .meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .meta.late, .prop-value input.late { color: var(--danger); }
@@ -480,3 +482,14 @@ kbd {
   background: var(--accent); color: #fff; box-shadow: var(--shadow);
 }
 .mm-node.left .mm-dots { right: auto; left: -10px; }
+
+/* Chấm báo việc cần ưu tiên */
+.flag-dot {
+  flex: none; width: 9px; height: 9px; border-radius: 50%;
+  background: hsl(var(--c)); box-shadow: 0 0 0 3px hsl(var(--c) / 0.22);
+}
+.mm-node.flagged .mm-title { font-weight: 700; }
+.mm-node.flagged .flag-dot { width: 10px; height: 10px; box-shadow: 0 0 0 4px hsl(var(--c) / 0.22); }
+.task-row .flag-dot, .tcell.title .flag-dot, .kcard .flag-dot { margin: 0 1px; }
+.kcard-top .flag-dot { margin-top: 6px; }
+.opt-row .icon-btn.on { color: var(--accent); background: var(--accent-soft); }

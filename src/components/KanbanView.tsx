@@ -4,7 +4,7 @@ import { actions } from '../store'
 import { allTasks, fold } from '../tableQuery'
 import { addChild, count, locate, newTask, remove, setDone, uid } from '../tree'
 import type { FieldOption, Mutate, Project, Task } from '../types'
-import { FieldNameMenu, RowChips, setTaskProp, usePopover } from './Fields'
+import { FieldNameMenu, FlagDot, RowChips, setTaskProp, usePopover } from './Fields'
 
 interface Props {
   project: Project
@@ -29,8 +29,8 @@ export default function KanbanView({ project, mutate, detailId, onOpenDetail }: 
     return (
       <div className="kanban-view">
         <div className="tbl-empty" style={{ padding: 32 }}>
-          Kanban cần một trường kiểu “Lựa chọn” (ví dụ Trạng thái). Hãy thêm trường đó trong tab Bảng hoặc trong panel chi
-          tiết của một công việc.
+          Kanban cần một trường kiểu “Lựa chọn” (ví dụ Trạng thái). Hãy thêm trường đó trong tab Bảng hoặc trong panel
+          chi tiết của một công việc.
         </div>
       </div>
     )
@@ -88,13 +88,20 @@ export default function KanbanView({ project, mutate, detailId, onOpenDetail }: 
   return (
     <div className="kanban-view">
       <div className="tbl-toolbar">
-        <input className="tb-search" placeholder="🔍 Tìm công việc…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input
+          className="tb-search"
+          placeholder="🔍 Tìm công việc…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <label className="tb-item tb-select">
           ▥ Cột theo
           <select
             aria-label="Cột theo"
             value={field.id}
-            onChange={(e) => actions.updateProject(project.id, { table: { ...project.table, boardBy: e.target.value } })}
+            onChange={(e) =>
+              actions.updateProject(project.id, { table: { ...project.table, boardBy: e.target.value } })
+            }
           >
             {selectFields.map((f) => (
               <option key={f.id} value={f.id}>
@@ -148,7 +155,9 @@ export default function KanbanView({ project, mutate, detailId, onOpenDetail }: 
                   return (
                     <div
                       key={task.id}
-                      className={'kcard' + (detailId === task.id ? ' selected' : '') + (dragId === task.id ? ' dragging' : '')}
+                      className={
+                        'kcard' + (detailId === task.id ? ' selected' : '') + (dragId === task.id ? ' dragging' : '')
+                      }
                       draggable={editing !== task.id}
                       onDragStart={(e) => {
                         setDragId(task.id)
@@ -169,6 +178,7 @@ export default function KanbanView({ project, mutate, detailId, onOpenDetail }: 
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => update(task.id, (t) => setDone(t, e.target.checked))}
                         />
+                        <FlagDot fields={project.fields} task={task} />
                         {editing === task.id ? (
                           <input
                             className="kcard-input"
@@ -183,7 +193,9 @@ export default function KanbanView({ project, mutate, detailId, onOpenDetail }: 
                             }}
                           />
                         ) : (
-                          <span className={'kcard-title' + (task.done ? ' done' : '')}>{task.title || 'Chưa đặt tên'}</span>
+                          <span className={'kcard-title' + (task.done ? ' done' : '')}>
+                            {task.title || 'Chưa đặt tên'}
+                          </span>
                         )}
                       </div>
                       {parent && <div className="parent-crumb">↳ {parent.title || 'Chưa đặt tên'}</div>}

@@ -34,6 +34,7 @@ export function defaultFields(): Field[] {
   status.options[2].color = 3
   const prio = newField('Ưu tiên', 'select', ['Cao', 'Trung bình', 'Thấp'])
   prio.options[0].color = 5
+  prio.options[0].flag = true
   prio.options[1].color = 3
   prio.options[2].color = 2
   return [status, prio, newField('Hạn chót', 'date'), newField('Người phụ trách', 'text'), newField('Nhãn', 'multi')]
@@ -63,10 +64,22 @@ export interface FieldChip {
   /** Tên trường, dùng làm tooltip. */
   title: string
   late?: boolean
+  flag?: boolean
 }
 
-const asList = (v: PropValue | undefined): string[] =>
-  Array.isArray(v) ? v : typeof v === 'string' && v ? [v] : []
+const asList = (v: PropValue | undefined): string[] => (Array.isArray(v) ? v : typeof v === 'string' && v ? [v] : [])
+
+/** Màu của lựa chọn "nổi bật" đầu tiên mà task đang mang; null nếu không có. */
+export function flagColor(fields: Field[], task: Task): number | null {
+  for (const f of fields) {
+    if (f.type !== 'select' && f.type !== 'multi') continue
+    for (const id of asList(task.props[f.id])) {
+      const o = f.options.find((x) => x.id === id)
+      if (o?.flag) return o.color
+    }
+  }
+  return null
+}
 
 /** Các giá trị trường của một task, dạng nhãn gọn để hiện trên dòng task hoặc nút mindmap. */
 export function fieldChips(fields: Field[], task: Task): FieldChip[] {
@@ -78,11 +91,17 @@ export function fieldChips(fields: Field[], task: Task): FieldChip[] {
     if (f.type === 'select' || f.type === 'multi') {
       for (const id of asList(v)) {
         const o = f.options.find((x) => x.id === id)
-        if (o) out.push({ key: f.id + id, label: o.label, color: o.color, title })
+        if (o) out.push({ key: f.id + id, label: o.label, color: o.color, title, flag: o.flag })
       }
     } else if (f.type === 'date') {
       const late = !task.done && isOverdue(String(v))
-      out.push({ key: f.id, label: '📅 ' + fmtDate(String(v)), color: null, title: title + (late ? ' · quá hạn' : ''), late })
+      out.push({
+        key: f.id,
+        label: '📅 ' + fmtDate(String(v)),
+        color: null,
+        title: title + (late ? ' · quá hạn' : ''),
+        late,
+      })
     } else if (f.type === 'checkbox') {
       out.push({ key: f.id, label: '☑ ' + title, color: null, title })
     } else {

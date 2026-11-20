@@ -11,11 +11,7 @@ export default function App() {
   return (
     <div className="app">
       {sidebarOpen && (
-        <Sidebar
-          projects={state.projects}
-          activeId={state.activeId}
-          onClose={() => setSidebarOpen(false)}
-        />
+        <Sidebar projects={state.projects} activeId={state.activeId} onClose={() => setSidebarOpen(false)} />
       )}
       <main className="main">
         {project ? (

@@ -1,21 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { COLORS, typeIcon } from '../fields'
 import { actions } from '../store'
-import {
-  DONE,
-  OPS,
-  TITLE,
-  allTasks,
-  columns,
-  comparator,
-  filterActive,
-  fold,
-  matches,
-  sortTree,
-} from '../tableQuery'
+import { DONE, OPS, TITLE, allTasks, columns, comparator, filterActive, fold, matches, sortTree } from '../tableQuery'
 import { addChild, insertAfter, locate, newTask, remove, setDone, uid } from '../tree'
 import type { Field, FieldOption, Mutate, Project, PropValue, TableConfig, TableFilter, Task } from '../types'
-import { AddFieldMenu, FieldNameMenu, FieldValue, setTaskProp, usePopover } from './Fields'
+import { AddFieldMenu, FieldNameMenu, FieldValue, FlagDot, setTaskProp, usePopover } from './Fields'
 
 interface Props {
   project: Project
@@ -60,7 +49,8 @@ export default function TableView({ project, mutate, detailId, onOpenDetail }: P
     setPinned(new Set())
     actions.updateProject(project.id, { table: { ...cfg, ...patch } })
   }
-  const setField = (f: Field) => actions.updateProject(project.id, { fields: fields.map((x) => (x.id === f.id ? f : x)) })
+  const setField = (f: Field) =>
+    actions.updateProject(project.id, { fields: fields.map((x) => (x.id === f.id ? f : x)) })
 
   const cols = columns(fields)
   const colOf = (id: string) => cols.find((c) => c.id === id)
@@ -230,7 +220,9 @@ export default function TableView({ project, mutate, detailId, onOpenDetail }: P
           <select
             aria-label="Sắp xếp theo"
             value={sortCol ? sortCol.id : ''}
-            onChange={(e) => setCfg({ sort: e.target.value ? { fieldId: e.target.value, dir: cfg.sort?.dir ?? 'asc' } : null })}
+            onChange={(e) =>
+              setCfg({ sort: e.target.value ? { fieldId: e.target.value, dir: cfg.sort?.dir ?? 'asc' } : null })
+            }
           >
             <option value="">Không</option>
             {cols.map((c) => (
@@ -292,7 +284,11 @@ export default function TableView({ project, mutate, detailId, onOpenDetail }: P
             </div>
             {fields.map((f) => (
               <div key={f.id} className="tcell th">
-                <button className="th-btn pop-anchor" title="Sửa trường và các lựa chọn" onClick={() => toggle('name:' + f.id)}>
+                <button
+                  className="th-btn pop-anchor"
+                  title="Sửa trường và các lựa chọn"
+                  onClick={() => toggle('name:' + f.id)}
+                >
                   <span className="prop-icon">{typeIcon(f.type)}</span>
                   <span className="prop-label">{f.name || 'Chưa đặt tên'}</span>
                 </button>
@@ -344,6 +340,7 @@ export default function TableView({ project, mutate, detailId, onOpenDetail }: P
                         style={{ gridTemplateColumns: gridCols }}
                       >
                         <TitleCell
+                          fields={fields}
                           task={task}
                           depth={depth}
                           parent={flat ? parent : null}
@@ -395,6 +392,7 @@ export default function TableView({ project, mutate, detailId, onOpenDetail }: P
 }
 
 interface TitleProps {
+  fields: Field[]
   task: Task
   depth: number
   /** Task cha, chỉ hiện khi bảng đang ở dạng phẳng (lọc / nhóm / tìm). */
@@ -464,6 +462,7 @@ function TitleCell(p: TitleProps) {
         tabIndex={-1}
         onChange={(e) => update((t) => setDone(t, e.target.checked))}
       />
+      <FlagDot fields={p.fields} task={task} />
       <input
         ref={ref}
         className={'task-title' + (task.done ? ' done' : '')}
@@ -477,15 +476,29 @@ function TitleCell(p: TitleProps) {
           ↳ {parent.title || 'Chưa đặt tên'}
         </span>
       )}
-      {task.notes && <span className="has-notes" title="Có ghi chú">📝</span>}
+      {task.notes && (
+        <span className="has-notes" title="Có ghi chú">
+          📝
+        </span>
+      )}
       <div className="tcell-actions">
         <button className="icon-btn" title="Thêm subtask" tabIndex={-1} onClick={p.onAddSub}>
           ＋
         </button>
-        <button className="icon-btn" title="Mở chi tiết / ghi chú" tabIndex={-1} onClick={() => p.onOpenDetail(task.id)}>
+        <button
+          className="icon-btn"
+          title="Mở chi tiết / ghi chú"
+          tabIndex={-1}
+          onClick={() => p.onOpenDetail(task.id)}
+        >
           ⤢
         </button>
-        <button className="icon-btn danger" title="Xoá" tabIndex={-1} onClick={() => mutate((ts) => remove(ts, task.id))}>
+        <button
+          className="icon-btn danger"
+          title="Xoá"
+          tabIndex={-1}
+          onClick={() => mutate((ts) => remove(ts, task.id))}
+        >
           ✕
         </button>
       </div>

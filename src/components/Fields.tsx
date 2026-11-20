@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
-import { COLORS, FIELD_TYPES, fieldChips, isOverdue, newField, typeIcon } from '../fields'
+import { COLORS, FIELD_TYPES, fieldChips, flagColor, isOverdue, newField, typeIcon } from '../fields'
 import { actions } from '../store'
 import { locate, uid } from '../tree'
 import type { Field, FieldOption, Mutate, Project, PropValue, Task } from '../types'
 
-const asList = (v: PropValue | undefined): string[] =>
-  Array.isArray(v) ? v : typeof v === 'string' && v ? [v] : []
+const asList = (v: PropValue | undefined): string[] => (Array.isArray(v) ? v : typeof v === 'string' && v ? [v] : [])
 
 function Chip({ opt }: { opt: FieldOption }) {
   return <span className={`chip c${opt.color % COLORS}`}>{opt.label}</span>
+}
+
+/** Chấm tròn báo công việc đang mang một lựa chọn được đánh dấu nổi bật (ví dụ Ưu tiên cao). */
+export function FlagDot({ fields, task }: { fields: Field[]; task: Task }) {
+  const c = flagColor(fields, task)
+  if (c === null || task.done) return null
+  return <span className={`flag-dot c${c % COLORS}`} title="Việc cần ưu tiên" />
 }
 
 /** Các giá trị trường hiển thị gọn trên một dòng task. */
@@ -23,7 +29,7 @@ export function RowChips({ fields, task }: { fields: Field[]; task: Task }) {
             {c.label}
           </span>
         ) : (
-          <span key={c.key} className={`chip c${c.color % COLORS}`} title={c.title}>
+          <span key={c.key} className={`chip c${c.color % COLORS}` + (c.flag ? ' flag' : '')} title={c.title}>
             {c.label}
           </span>
         ),
@@ -77,7 +83,9 @@ interface ValueProps {
 /** Ô sửa giá trị của một trường, theo kiểu trường. */
 export function FieldValue({ field: f, value: v, done, open, onToggle, onClose, onChange, onFieldChange }: ValueProps) {
   if (f.type === 'text') {
-    return <input value={typeof v === 'string' ? v : ''} placeholder="Trống" onChange={(e) => onChange(e.target.value)} />
+    return (
+      <input value={typeof v === 'string' ? v : ''} placeholder="Trống" onChange={(e) => onChange(e.target.value)} />
+    )
   }
   if (f.type === 'number') {
     return (
@@ -167,7 +175,18 @@ export function FieldNameMenu({ project, field: f, onClose }: FieldMenuProps & {
                 title="Đổi màu"
                 onClick={() => patchOpt(o.id, { color: (o.color + 1) % COLORS })}
               />
-              <input value={o.label} placeholder="Tên lựa chọn" onChange={(e) => patchOpt(o.id, { label: e.target.value })} />
+              <input
+                value={o.label}
+                placeholder="Tên lựa chọn"
+                onChange={(e) => patchOpt(o.id, { label: e.target.value })}
+              />
+              <button
+                className={'icon-btn' + (o.flag ? ' on' : '')}
+                title="Làm nổi bật công việc mang lựa chọn này"
+                onClick={() => patchOpt(o.id, { flag: !o.flag })}
+              >
+                ⚑
+              </button>
               <button
                 className="icon-btn danger"
                 title="Xoá lựa chọn"
@@ -214,7 +233,13 @@ export function AddFieldMenu({ project, onClose }: FieldMenuProps) {
   const [name, setName] = useState('')
   return (
     <div className="pop">
-      <input className="pop-input" autoFocus value={name} placeholder="Tên trường" onChange={(e) => setName(e.target.value)} />
+      <input
+        className="pop-input"
+        autoFocus
+        value={name}
+        placeholder="Tên trường"
+        onChange={(e) => setName(e.target.value)}
+      />
       <div className="pop-label">Chọn kiểu</div>
       {FIELD_TYPES.map((t) => (
         <button
@@ -243,7 +268,8 @@ interface PanelProps {
 export function PropertyPanel({ project, task, mutate }: PanelProps) {
   const { open, setOpen, toggle } = usePopover()
   const fields = project.fields
-  const setField = (f: Field) => actions.updateProject(project.id, { fields: fields.map((x) => (x.id === f.id ? f : x)) })
+  const setField = (f: Field) =>
+    actions.updateProject(project.id, { fields: fields.map((x) => (x.id === f.id ? f : x)) })
 
   return (
     <div className="props">
@@ -361,7 +387,9 @@ function SelectEditor({ field, value, open, onToggle, onClose, onChange, onField
               Tạo <span className="chip c7">{query}</span>
             </button>
           )}
-          {!query && field.options.length === 0 && <div className="pop-label">Gõ tên rồi nhấn Enter để tạo lựa chọn</div>}
+          {!query && field.options.length === 0 && (
+            <div className="pop-label">Gõ tên rồi nhấn Enter để tạo lựa chọn</div>
+          )}
         </div>
       )}
     </>

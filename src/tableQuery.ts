@@ -40,7 +40,11 @@ const EMPTY: OpDef[] = [
 ]
 
 export const OPS: Record<FieldType, OpDef[]> = {
-  text: [{ op: 'contains', label: 'chứa', needs: true }, { op: 'notcontains', label: 'không chứa', needs: true }, ...EMPTY],
+  text: [
+    { op: 'contains', label: 'chứa', needs: true },
+    { op: 'notcontains', label: 'không chứa', needs: true },
+    ...EMPTY,
+  ],
   number: [
     { op: 'eq', label: '=', needs: true },
     { op: 'gte', label: '≥', needs: true },
@@ -62,12 +66,7 @@ export const OPS: Record<FieldType, OpDef[]> = {
   ],
 }
 
-export const fold = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/gi, 'd')
-    .toLowerCase()
+export const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase()
 
 const isEmpty = (v: PropValue | undefined) =>
   v === undefined || v === '' || v === false || (Array.isArray(v) && v.length === 0)

@@ -9,10 +9,11 @@ import {
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { BRANCH_HUES as HUES, COLORS, fieldChips, type FieldChip } from '../fields'
+import { BRANCH_HUES as HUES, COLORS, fieldChips, flagColor, type FieldChip } from '../fields'
 import { actions } from '../store'
 import { addChild, canMove, insertAfter, locate, move, newTask, remove, setDone, type DropPos } from '../tree'
 import type { Mutate, Project, Task } from '../types'
+import { FlagDot } from './Fields'
 import NodeMenu from './NodeMenu'
 
 const ROOT = '__root__'
@@ -48,6 +49,8 @@ interface LNode {
   hue: number | null
   depth: number
   chips: FieldChip[]
+  /** Có lựa chọn được đánh dấu nổi bật (ưu tiên cao…). */
+  flagged: boolean
   kids: LNode[]
 }
 
@@ -128,7 +131,9 @@ function layout(project: Project): { nodes: LNode[]; root: LNode } {
   const make = (t: Task): LNode => {
     const text = t.title || 'Công việc…'
     const chips = fieldChips(metaFields, t)
-    const titleW = textWidth(text, FONT) + 58 + (t.notes ? 20 : 0)
+    // Chấm nổi bật xét trên mọi trường, kể cả trường đang bị ẩn nhãn.
+    const flagged = !t.done && flagColor(project.fields, t) !== null
+    const titleW = textWidth(text, FONT) + 58 + (t.notes ? 20 : 0) + (flagged ? 14 : 0)
     const metaW = chips.length === 0 ? 0 : chips.reduce((sum, c) => sum + textWidth(c.label, META_FONT) + 19, 0) + 24
     const w = Math.min(400, Math.max(96, titleW, metaW))
     return {
@@ -141,6 +146,7 @@ function layout(project: Project): { nodes: LNode[]; root: LNode } {
       h: chips.length ? H + META_H : H,
       sh: H,
       chips,
+      flagged,
       dir: 1,
       hue: null,
       depth: 0,
@@ -158,6 +164,7 @@ function layout(project: Project): { nodes: LNode[]; root: LNode } {
     h: H,
     sh: H,
     chips: [],
+    flagged: false,
     dir: 1,
     hue: null,
     depth: 0,
@@ -645,7 +652,8 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
             (t?.done ? ' done' : '') +
             (dragSkip?.has(n.id) ? ' dragging' : '') +
             (dnd?.target === n.id && dnd.pos === 'child' ? ' drop-child' : '') +
-            (n.hue === null ? '' : ' mm-branch' + (n.depth === 1 ? ' lvl1' : ''))
+            (n.hue === null ? '' : ' mm-branch' + (n.depth === 1 ? ' lvl1' : '')) +
+            (n.flagged ? ' flagged' : '')
           return (
             <div
               key={n.id}
@@ -669,6 +677,7 @@ export default function MindMap({ project, mutate, onOpenDetail }: Props) {
               }}
             >
               <div className="mm-line">
+                {t && <FlagDot fields={project.fields} task={t} />}
                 {t && (
                   <input
                     type="checkbox"

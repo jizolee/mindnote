@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ClipboardEvent,
-  type KeyboardEvent,
-} from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react'
 import { newBlock, parseLine, type Block, type BlockType } from '../blocks'
 
 interface Item {
@@ -55,12 +48,7 @@ const SHORTCUT: Record<string, BlockType> = {
 
 const CONTINUES: BlockType[] = ['bullet', 'number', 'todo']
 
-const fold = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/gi, 'd')
-    .toLowerCase()
+const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase()
 
 const read = (el: HTMLElement) => {
   const t = el.textContent ?? ''
@@ -494,7 +482,9 @@ export default function BlockEditor({ blocks, onChange }: Props) {
                 {items.map((it, k) => (
                   <button
                     key={it.type}
-                    className={(k === open.index ? 'on' : '') + (open.kind === 'handle' && it.type === b.type ? ' current' : '')}
+                    className={
+                      (k === open.index ? 'on' : '') + (open.kind === 'handle' && it.type === b.type ? ' current' : '')
+                    }
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pick(open, it)}
                   >
